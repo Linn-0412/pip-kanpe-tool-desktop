@@ -4,9 +4,8 @@
   "plugins": {
     "updater": {
       "endpoints": [
-        "https://github.com/Linn-0412/pip-kanpe-tool-desktop/releases/latest/download/latest-beta.json"
+        "https://github.com/Linn-0412/pip-kanpe-tool-desktop/releases/download/beta/latest.json"
       ]
     }
   }
 }
-

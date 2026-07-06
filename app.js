@@ -200,6 +200,10 @@ const state = {
   currentIndex: 0,
   objectUrls: new Map(),
   pipWindow: null,
+  desktopPipOpen: false,
+  desktopPipSyncId: 0,
+  desktopEventUnlisteners: [],
+  updateCheckInProgress: false,
   maker: {
     items: [],
     selectedId: null,
@@ -240,6 +244,10 @@ async function init() {
   applyBrowserGuide();
   updateSupportBadge();
   updateVariantBadge();
+  prepareDesktopUi();
+  if (isDesktopApp()) {
+    await bindDesktopEvents();
+  }
 
   try {
     if (isDesktopApp()) {
@@ -261,6 +269,9 @@ async function init() {
     normalizeCurrentIndex();
     render();
     setStatus(isDesktopApp() ? "準備完了。データはこのPCのアプリデータに保存されます。" : "準備完了。画像はこのブラウザ内だけに保存されます。");
+    if (isDesktopApp()) {
+      checkForUpdates({ automatic: true });
+    }
   } catch (error) {
     console.error(error);
     setStatus(isDesktopApp() ? "デスクトップ保存領域を開けませんでした。アプリを再起動してください。" : "IndexedDBを開けませんでした。ブラウザ設定を確認してください。", true);
@@ -287,8 +298,98 @@ async function hydrateDesktopInfo() {
   try {
     const info = await invokeDesktop("get_desktop_info");
     console.info("PiP Kanpe Tool Desktop", info);
+    const shortcuts = await invokeDesktop("get_shortcut_info");
+    console.info("PiP Kanpe Tool shortcuts", shortcuts);
   } catch (error) {
     console.warn("Desktop info unavailable", error);
+  }
+}
+
+function prepareDesktopUi() {
+  const desktop = isDesktopApp();
+  if (els.checkUpdate) {
+    els.checkUpdate.hidden = !desktop;
+  }
+  if (els.updateStatus) {
+    els.updateStatus.hidden = !desktop;
+  }
+}
+
+function bindDesktopEvents() {
+  const handleNavigate = (event) => {
+    const direction = Number(event.detail?.direction);
+    if (direction < 0) {
+      previousCard();
+      setStatus("グローバルショートカット: 前のカンペへ");
+    } else if (direction > 0) {
+      nextCard();
+      setStatus("グローバルショートカット: 次のカンペへ");
+    }
+  };
+
+  const handleSnapshotRequest = () => {
+    state.desktopPipOpen = true;
+    updatePip();
+  };
+
+  window.addEventListener("pip:navigate", handleNavigate);
+  window.addEventListener("pip:request-snapshot", handleSnapshotRequest);
+
+  state.desktopEventUnlisteners.push(
+    () => window.removeEventListener("pip:navigate", handleNavigate),
+    () => window.removeEventListener("pip:request-snapshot", handleSnapshotRequest),
+  );
+}
+
+function cleanupDesktopEvents() {
+  state.desktopEventUnlisteners.forEach((unlisten) => {
+    try {
+      unlisten();
+    } catch (error) {
+      console.warn("Desktop event cleanup failed", error);
+    }
+  });
+  state.desktopEventUnlisteners = [];
+}
+
+async function checkForUpdates({ automatic = false } = {}) {
+  if (!isDesktopApp() || state.updateCheckInProgress) {
+    return;
+  }
+
+  state.updateCheckInProgress = true;
+  setUpdateStatus("確認中...", "");
+
+  try {
+    const result = await invokeDesktop("check_update");
+    if (result.available) {
+      const version = result.version ? `v${result.version}` : "新しいバージョン";
+      setUpdateStatus(`${version} があります`, "ok");
+    } else {
+      setUpdateStatus(`最新です（v${result.currentVersion}）`, "ok");
+    }
+  } catch (error) {
+    console.warn("Update check failed", error);
+    if (automatic) {
+      setUpdateStatus("更新確認はlatest.json公開後に有効です", "warn");
+    } else {
+      setUpdateStatus("更新情報を取得できませんでした", "error");
+    }
+  } finally {
+    state.updateCheckInProgress = false;
+  }
+}
+
+function setUpdateStatus(message, tone) {
+  if (!els.updateStatus) {
+    return;
+  }
+
+  els.updateStatus.hidden = !isDesktopApp();
+  els.updateStatus.textContent = message;
+  els.updateStatus.classList.remove("ok", "warn", "error");
+  if (tone) {
+    els.updateStatus.classList.add(tone);
   }
 }
 
@@ -297,6 +398,8 @@ function bindElements() {
     "variant-badge",
     "beta-feedback",
     "support-badge",
+    "check-update",
+    "update-status",
     "open-guide",
     "open-pip",
     "open-maker",
@@ -446,6 +549,7 @@ function bindEvents() {
   els.previewPipNext.addEventListener("click", nextCard);
   els.previewStage.addEventListener("click", handlePipControlsHitAreaClick);
   els.openPip.addEventListener("click", openPip);
+  els.checkUpdate?.addEventListener("click", () => checkForUpdates({ automatic: false }));
   els.openGuide.addEventListener("click", showGuideModal);
   els.openMaker.addEventListener("click", showMakerModal);
   els.clearAll.addEventListener("click", clearAllCards);
@@ -656,7 +760,10 @@ function bindEvents() {
     }
   });
 
-  window.addEventListener("beforeunload", revokeAllObjectUrls);
+  window.addEventListener("beforeunload", () => {
+    revokeAllObjectUrls();
+    cleanupDesktopEvents();
+  });
 }
 
 // Ctrl+Vで受け取った画像をFileとして扱い、通常のファイル追加処理へ流す。
@@ -2395,7 +2502,7 @@ function handleExtensionMessage(event) {
 }
 
 function updateSupportBadge() {
-  const supported = "documentPictureInPicture" in window;
+  const supported = isDesktopApp() || "documentPictureInPicture" in window;
   els.supportBadge.textContent = supported ? "PiP対応" : "PiP非対応";
   els.supportBadge.classList.toggle("ok", supported);
   els.supportBadge.classList.toggle("warn", !supported);
@@ -3408,13 +3515,18 @@ function updateControls() {
   const hasCards = state.cards.length > 0;
   const hasVisibleCards = getVisibleIndices().length > 0;
 
-  els.openPip.disabled = !hasVisibleCards || !("documentPictureInPicture" in window);
+  els.openPip.disabled = !hasVisibleCards || (!isDesktopApp() && !("documentPictureInPicture" in window));
   els.clearAll.disabled = !hasCards;
   els.exportDeck.disabled = !hasCards;
 }
 
 // Document Picture-in-Pictureを開く。失敗時はユーザー操作から再試行してもらう。
 async function openPip() {
+  if (isDesktopApp()) {
+    await openDesktopPip();
+    return;
+  }
+
   if (!("documentPictureInPicture" in window)) {
     setStatus("このブラウザはDocument Picture-in-Pictureに対応していません。", true);
     return;
@@ -3448,6 +3560,32 @@ async function openPip() {
   } catch (error) {
     console.error(error);
     setStatus("PiPを開けませんでした。ボタン操作からもう一度試してください。", true);
+  }
+}
+
+async function openDesktopPip() {
+  if (!getCurrentCard()) {
+    const hasGroupCards = getGroupIndices().length > 0;
+    setStatus(
+      state.cards.length > 0 && hasGroupCards
+        ? "表示できる画像がありません。リストの目アイコンで非表示を解除してください。"
+        : state.cards.length > 0
+          ? "このグループにはまだ画像がありません。画像を追加するか、登録画像のグループチェックをオンにしてください。"
+          : "PiPで表示する画像を登録してください。",
+      true,
+    );
+    return;
+  }
+
+  try {
+    const [width, height] = state.settings.pipSize.split("x").map(Number);
+    await invokeDesktop("open_pip_window", { options: { width, height } });
+    state.desktopPipOpen = true;
+    await syncDesktopPipWindow();
+    setStatus("Tauri版PiP小窓を開きました。Ctrl+F5で前、Ctrl+F6で次へ切り替えできます。");
+  } catch (error) {
+    console.error(error);
+    setStatus("Tauri版PiP小窓を開けませんでした。もう一度試してください。", true);
   }
 }
 
@@ -3532,6 +3670,11 @@ function getPipCss() {
 
 // 現在のカード、表示設定、ボタン状態をPiP小窓へ反映する。
 function updatePip() {
+  if (isDesktopApp()) {
+    syncDesktopPipWindow();
+    return;
+  }
+
   const pip = state.pipWindow;
   if (!pip || pip.closed) {
     return;
@@ -3578,6 +3721,71 @@ function updatePip() {
   const multipleVisible = getVisibleIndices().length > 1;
   prev.disabled = !multipleVisible;
   next.disabled = !multipleVisible;
+}
+
+async function syncDesktopPipWindow() {
+  if (!state.desktopPipOpen) {
+    return;
+  }
+
+  const syncId = (state.desktopPipSyncId += 1);
+
+  try {
+    const payload = await createDesktopPipPayload();
+    if (syncId !== state.desktopPipSyncId) {
+      return;
+    }
+
+    const updated = await invokeDesktop("update_pip_window", { payload });
+    if (!updated) {
+      state.desktopPipOpen = false;
+    }
+  } catch (error) {
+    console.warn("Desktop PiP sync failed", error);
+  }
+}
+
+async function createDesktopPipPayload() {
+  const card = getCurrentCard();
+  const activeGroup = getActiveGroup();
+  const controls = {
+    size: getPipControlsSize(),
+    placement: getPipControlsPlacementClass(),
+    vertical: isVerticalPipControls(),
+    position: getPipControlsPosition(),
+    background: getPipControlsBackground(),
+    fullHeightButtons: state.settings.pipControlsFullHeightButtons === true,
+    separate: state.settings.pipControlsSeparateFromImage,
+    autoHide: state.settings.pipControlsAutoHide,
+    labelHidden: !shouldShowPipLabel(),
+  };
+
+  if (!card) {
+    return {
+      hasCard: false,
+      title: activeGroup ? `PiP カンペ - ${activeGroup.name}` : formatPipDocumentTitle(null),
+      message:
+        state.cards.length > 0 && getGroupIndices().length === 0
+          ? "このグループにはまだ画像がありません"
+          : state.cards.length > 0
+            ? "表示できる画像がありません"
+            : "PiPで表示する画像を登録してください",
+      fitMode: state.settings.fitMode,
+      controls,
+      canNavigate: false,
+    };
+  }
+
+  return {
+    hasCard: true,
+    imageSrc: await blobToDataUrl(card.blob),
+    imageAlt: card.name,
+    title: formatPipDocumentTitle(card),
+    label: formatPipLabel(card),
+    fitMode: state.settings.fitMode,
+    controls,
+    canNavigate: getVisibleIndices().length > 1,
+  };
 }
 
 // 設定値をCSSクラスへ変換する。PiPとプレビューが同じ関数を使うのが重要。

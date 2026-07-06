@@ -3,4 +3,3 @@
 fn main() {
     pip_kanpe_tool_desktop_lib::run();
 }
-

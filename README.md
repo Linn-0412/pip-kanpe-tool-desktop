@@ -7,9 +7,12 @@ PiP Kanpe Tool のデスクトップアプリ版リポジトリです。
 ## 現在の状態
 
 - Web 版の主要ファイルを初期ベースとしてコピー
-- ブラウザ拡張機能と GitHub Pages 用の構成は未追加
 - Tauri v2 の最小構成を追加
 - IndexedDB / localStorage の代わりに、Tauri ではアプリデータ配下の JSON ストアへ保存
+- メイン画面から常に手前表示の Tauri 小窓を開き、現在のカンペ画像を同期
+- Tauri の global-shortcut plugin で `Ctrl+F5` / `Ctrl+F6` による前後切り替えに対応
+- 起動時とボタン操作でアプリ内更新チェックを実行
+- GitHub Actions で CI と Windows 向け Release asset 作成を実行
 - 初期バージョンは `0.1.0`
 
 ## 開発コマンド
@@ -19,6 +22,7 @@ npm run check
 npm test
 npm run tauri:dev
 npm run tauri:build
+npm run tauri:build:beta
 ```
 
 Rust / Cargo が必要です。未導入の場合は Tauri の前提条件を入れてから `npm run tauri:dev` を実行してください。
@@ -55,7 +59,7 @@ https://github.com/Linn-0412/pip-kanpe-tool-desktop/releases/latest/download/lat
 beta:
 
 ```text
-https://github.com/Linn-0412/pip-kanpe-tool-desktop/releases/latest/download/latest-beta.json
+https://github.com/Linn-0412/pip-kanpe-tool-desktop/releases/download/beta/latest.json
 ```
 
 Tauri のアップデーターは署名検証が必須です。`src-tauri/tauri.conf.json` には公開鍵だけを設定し、秘密鍵はリポジトリに含めません。
@@ -69,8 +73,8 @@ npm run tauri -- signer generate --ci -p "<password>" -w ~/.tauri/pip-kanpe-tool
 Windows PowerShell でビルド時に秘密鍵を指定:
 
 ```powershell
-$env:TAURI_SIGNING_PRIVATE_KEY=Get-Content "C:\Users\<user>\.tauri\pip-kanpe-tool-desktop.key" -Raw
-$env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD="<password>"
+$env:TAURI_SIGNING_PRIVATE_KEY = Get-Content "C:\Users\<user>\.tauri\pip-kanpe-tool-desktop.key" -Raw
+$env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = "<password>"
 npm run tauri:build
 ```
 
@@ -81,9 +85,31 @@ $env:PIP_KANPE_UPDATE_CHANNEL="beta"
 npm run tauri:build:beta
 ```
 
+GitHub Actions では次の Secrets を使って署名します。
+
+- `TAURI_SIGNING_PRIVATE_KEY`
+- `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`
+
+## リリース運用
+
+通常リリース:
+
+1. `package.json` と `src-tauri/tauri.conf.json` のバージョンを更新
+2. `main` に push して CI を通す
+3. GitHub Actions の `Release Desktop` を `stable` で実行
+4. Release に `.msi` / `.exe` / `latest.json` / 署名ファイルが追加されたことを確認
+
+βリリース:
+
+1. GitHub Actions の `Release Desktop` を `beta` で実行
+2. 固定タグ `beta` の prerelease に成果物と `latest.json` をアップロード
+3. β版アプリは `src-tauri/tauri.beta.conf.json` の endpoint から更新確認
+
+CI は `main` への push、pull request、手動実行で `npm run check`、`npm test`、`cargo check` を実行します。
+
 ## 次にやること
 
-- Rust / Cargo を導入して `npm run tauri:dev` を確認
-- GitHub Actions で署名鍵を Secrets 管理し、公開鍵と一致するキーで更新成果物を署名
-- GitHub Actions で Windows 向けビルドと Release asset アップロードを自動化
-- アプリ内に更新確認ボタンまたは起動時更新通知を追加
+- 初回 GitHub Actions Release 後に、実機で `更新を確認` から更新適用まで通るか検証
+- 必要に応じて Windows コード署名証明書の導入を検討
+- ショートカットを画面上で変更できる設定 UI を追加
+- JSON ストアの容量が重くなった場合に、画像ファイル分離または SQLite 移行を検討

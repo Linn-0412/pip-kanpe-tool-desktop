@@ -2,7 +2,7 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "Default permissions for the main desktop window.",
-  "windows": ["main"],
+  "windows": ["main", "pip"],
   "permissions": [
     "core:default",
     "updater:default",
@@ -10,4 +10,3 @@
     "updater:allow-download-and-install"
   ]
 }
-

@@ -1,0 +1,93 @@
+name: Release Desktop
+
+on:
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: Release channel
+        required: true
+        default: stable
+        type: choice
+        options:
+          - stable
+          - beta
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    name: Publish Windows app
+    runs-on: windows-latest
+
+    env:
+      CARGO_TERM_COLOR: always
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: npm
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: ./src-tauri -> target
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check JavaScript syntax
+        run: npm run check
+
+      - name: Run tests
+        run: npm test
+
+      - name: Publish stable release
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.channel == 'stable' }}
+        uses: tauri-apps/tauri-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tagName: v__VERSION__
+          releaseName: PiP Kanpe Tool Desktop v__VERSION__
+          releaseBody: |
+            Windows向けデスクトップ版です。
+
+            - アプリ内更新用の latest.json を同梱します。
+            - 署名済みアップデーター成果物を生成します。
+          prerelease: false
+          uploadUpdaterJson: true
+          updaterJsonPreferNsis: true
+
+      - name: Publish beta release
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.channel == 'beta' }}
+        uses: tauri-apps/tauri-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tagName: beta
+          releaseName: PiP Kanpe Tool Desktop Beta
+          releaseBody: |
+            βテスター向けのデスクトップ版です。
+
+            - beta チャンネル向けの latest.json を同梱します。
+            - 正式版へ入れる前の動作確認に使います。
+          prerelease: true
+          uploadUpdaterJson: true
+          updaterJsonPreferNsis: true
+          args: --config src-tauri/tauri.beta.conf.json

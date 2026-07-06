@@ -39,7 +39,7 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDZCMDI1QjcyNDk0OTI4RTYKUldUbUtFbEpjbHNDYXowMmdxWStOeTNxWUdzdGp0Z3dUZVFrM3JKaVA5b3NiYlA0cVVlOSs3dDMK",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEQ2OEE0M0YyRjY3OTE5RjQKUldUMEdYbjI4a09LMWc2cnYybnRZUE9DK0Z2U1JEUUhheWF3a2N2TE9mZ3FxZzROYUVVUTVuUHUK",
       "endpoints": [
         "https://github.com/Linn-0412/pip-kanpe-tool-desktop/releases/latest/download/latest.json"
       ],

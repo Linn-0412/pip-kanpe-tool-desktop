@@ -6,7 +6,9 @@ const dist = path.join(root, "dist");
 
 const entries = [
   "index.html",
+  "pip.html",
   "app.js",
+  "pip-window.js",
   "core.js",
   "styles.css",
   "favicon.jpg",
@@ -22,4 +24,3 @@ for (const entry of entries) {
     force: true,
   });
 }
-
