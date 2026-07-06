@@ -12,7 +12,7 @@
   <body>
     <header class="app-header">
       <div>
-        <p class="eyebrow">Local image deck / Document PiP</p>
+        <p class="eyebrow">Local image deck / Desktop PiP</p>
         <h1>PiP カンペツール</h1>
       </div>
       <div class="header-actions">
@@ -299,7 +299,7 @@
         <ol class="guide-steps">
           <li>
             <strong>画像を登録</strong>
-            <span>カンペ画像を複数選択、画像追加エリアへドロップ、または画像をコピーした状態でCtrl+Vを押して登録します。複数選択時はファイル名順で追加します。大量に登録する場合は「保存時に長辺2048pxへ軽量化」をオンにしておくと軽くなります。</span>
+            <span>カンペ画像を複数選択、画像追加エリアへドロップ、または画像をコピーした状態でCtrl+Vを押して登録します。データはこのPCのアプリデータに保存され、サーバーへアップロードしません。</span>
           </li>
           <li>
             <strong>グループで分ける</strong>
@@ -311,11 +311,11 @@
           </li>
           <li>
             <strong>PiPで表示</strong>
-            <span>Chrome / Edgeで「PiPで表示」を押すと、小窓に現在のカンペを表示します。</span>
+            <span>「PiPで表示」を押すと、常に手前表示の小窓に現在のカンペを表示します。小窓の ← / → でも前後のカンペへ切り替えられます。</span>
           </li>
           <li>
             <strong>ゲーム中に切り替える</strong>
-            <span>PiP小窓の ← / →、またはChrome / Edge拡張のショートカットで前後のカンペへ切り替えます。FF14の表示モードごとのPiP表示可否は次の通りです。</span>
+            <span>デスクトップ版ショートカットで、ゲームを操作中でも前後のカンペへ切り替えられます。初期設定は前が Ctrl+F5、次が Ctrl+F6 です。FF14の表示モードごとの小窓表示可否は次の通りです。</span>
             <dl class="guide-mode-list">
               <div>
                 <dt>フルスクリーン</dt>
@@ -332,20 +332,17 @@
             </dl>
           </li>
           <li>
-            <strong>ショートカットを使う場合</strong>
+            <strong>ショートカットを変える</strong>
             <ol class="guide-substeps">
-              <li><a id="guide-extension-download-link" class="guide-link" href="https://github.com/Linn-0412/pip-kanpe-tool/releases/latest/download/pip-kanpe-tool-hotkeys-extension.zip" target="_blank" rel="noopener">こちらからChrome / Edge用拡張機能ZIPをダウンロード</a>して解凍します。</li>
-              <li>
-                <span id="guide-extensions-instruction">Chromeの拡張機能画面（chrome://extensions/）を開き、デベロッパーモードをオンにします。</span>
-                <button id="guide-extensions-copy" class="copy-url-button" type="button" data-copy-url="chrome://extensions/">URLをコピー</button>
-              </li>
-              <li id="guide-load-unpacked-instruction">「パッケージ化されていない拡張機能を読み込む」から、解凍したフォルダを選びます。</li>
-              <li>
-                <span id="guide-shortcuts-instruction">ショートカット設定画面（chrome://extensions/shortcuts）でキー設定を確認します。</span>
-                <button id="guide-shortcuts-copy" class="copy-url-button" type="button" data-copy-url="chrome://extensions/shortcuts">URLをコピー</button>
-              </li>
+              <li>「デスクトップ版ショートカット」を開きます。</li>
+              <li>前/次の入力欄へ直接入力するか、「キー入力」を押して割り当てたいキーを押します。</li>
+              <li>「適用」を押すと、グローバルショートカットとして登録されます。</li>
             </ol>
-            <small id="guide-extension-note" class="guide-note">※ 初期設定は「Ctrl+Shift+8」が前、「Ctrl+Shift+9」が次です。FF14のキーバインドと衝突する場合はショートカット設定画面で別のキーに変更してください。</small>
+            <small class="guide-note">※ FF14のキーバインドや他アプリと衝突する場合は、別のキーに変更してください。Escでキー入力待ちをキャンセルできます。</small>
+          </li>
+          <li>
+            <strong>更新と支援</strong>
+            <span>「更新を確認」で新しいバージョンを確認できます。「支援する」を押すとOFUSEのページをブラウザで開き、開発支援ができます。</span>
           </li>
         </ol>
 

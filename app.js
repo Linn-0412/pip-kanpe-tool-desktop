@@ -63,36 +63,6 @@ const DEFAULT_SHORTCUT_NEXT = "Ctrl+F6";
 const SUPPORT_URL = "https://ofuse.me/linn0412";
 const PIP_CONTROL_PLACEMENT_CLASSES = ["horizontal", "vertical", "vertical-left", "vertical-right"];
 const PIP_CONTROL_BEHAVIOR_CLASSES = ["full-height-buttons"];
-const EXTENSION_GUIDES = {
-  chrome: {
-    browserName: "Chrome",
-    downloadUrl:
-      "https://github.com/Linn-0412/pip-kanpe-tool/releases/latest/download/pip-kanpe-tool-hotkeys-extension.zip",
-    downloadText: "こちらからChrome / Edge用拡張機能ZIPをダウンロード",
-    extensionsUrl: "chrome://extensions/",
-    shortcutsUrl: "chrome://extensions/shortcuts",
-    extensionsInstruction:
-      "Chromeの拡張機能画面（chrome://extensions/）を開き、デベロッパーモードをオンにします。",
-    loadUnpackedInstruction: "「パッケージ化されていない拡張機能を読み込む」から、解凍したフォルダを選びます。",
-    shortcutsInstruction: "ショートカット設定画面（chrome://extensions/shortcuts）でキー設定を確認します。",
-    note:
-      "※ 初期設定は「Ctrl+Shift+8」が前、「Ctrl+Shift+9」が次です。FF14のキーバインドと衝突する場合はショートカット設定画面で別のキーに変更してください。",
-  },
-  edge: {
-    browserName: "Edge",
-    downloadUrl:
-      "https://github.com/Linn-0412/pip-kanpe-tool/releases/latest/download/pip-kanpe-tool-hotkeys-extension.zip",
-    downloadText: "こちらからChrome / Edge用拡張機能ZIPをダウンロード",
-    extensionsUrl: "edge://extensions/",
-    shortcutsUrl: "edge://extensions/shortcuts",
-    extensionsInstruction:
-      "Edgeの拡張機能画面（edge://extensions/）を開き、左下の開発者モードをオンにします。",
-    loadUnpackedInstruction: "「展開して読み込む」から、解凍したフォルダを選びます。",
-    shortcutsInstruction: "ショートカット設定画面（edge://extensions/shortcuts）でキー設定を確認します。",
-    note:
-      "※ 初期設定は「Ctrl+Shift+8」が前、「Ctrl+Shift+9」が次です。FF14のキーバインドと衝突する場合はショートカット設定画面で別のキーに変更してください。",
-  },
-};
 
 const EYE_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>`;
 const EYE_OFF_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.94 17.94A10.5 10.5 0 0 1 12 19c-6.5 0-10-7-10-7a18.5 18.5 0 0 1 5.06-5.94M9.9 4.24A9.5 9.5 0 0 1 12 4c6.5 0 10 7 10 7a18.6 18.6 0 0 1-2.16 3.19M1 1l22 22"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg>`;
@@ -247,7 +217,6 @@ async function init() {
   bindElements();
   bindEvents();
   buildMakerAssetPalette();
-  applyBrowserGuide();
   updateSupportBadge();
   updateVariantBadge();
   prepareDesktopUi();
@@ -475,13 +444,6 @@ function bindElements() {
     "close-guide",
     "close-guide-icon",
     "hide-guide-next-time",
-    "guide-extension-download-link",
-    "guide-extensions-instruction",
-    "guide-extensions-copy",
-    "guide-load-unpacked-instruction",
-    "guide-shortcuts-instruction",
-    "guide-shortcuts-copy",
-    "guide-extension-note",
     "maker-modal",
     "close-maker",
     "maker-background",
@@ -551,7 +513,6 @@ function bindEvents() {
   });
 
   document.addEventListener("paste", handlePaste);
-  window.addEventListener("message", handleExtensionMessage);
 
   ["dragenter", "dragover"].forEach((name) => {
     els.dropZone.addEventListener(name, (event) => {
@@ -600,12 +561,6 @@ function bindEvents() {
   els.closeGuide.addEventListener("click", closeGuideModal);
   els.closeGuideIcon.addEventListener("click", closeGuideModal);
   els.guideModal.addEventListener("click", (event) => {
-    const copyButton = event.target instanceof Element ? event.target.closest("[data-copy-url]") : null;
-    if (copyButton instanceof HTMLButtonElement) {
-      copyGuideUrl(copyButton);
-      return;
-    }
-
     if (event.target === els.guideModal) {
       closeGuideModal();
     }
@@ -862,56 +817,8 @@ async function handlePaste(event) {
   });
 }
 
-function applyBrowserGuide() {
-  const guide = getCurrentBrowserGuide();
-
-  if (els.guideExtensionDownloadLink instanceof HTMLAnchorElement) {
-    els.guideExtensionDownloadLink.href = guide.downloadUrl;
-    els.guideExtensionDownloadLink.textContent = guide.downloadText;
-  }
-  if (els.guideExtensionsInstruction) {
-    els.guideExtensionsInstruction.textContent = guide.extensionsInstruction;
-  }
-  if (els.guideExtensionsCopy instanceof HTMLButtonElement) {
-    els.guideExtensionsCopy.dataset.copyUrl = guide.extensionsUrl;
-  }
-  if (els.guideLoadUnpackedInstruction) {
-    els.guideLoadUnpackedInstruction.textContent = guide.loadUnpackedInstruction;
-  }
-  if (els.guideShortcutsInstruction) {
-    els.guideShortcutsInstruction.textContent = guide.shortcutsInstruction;
-  }
-  if (els.guideShortcutsCopy instanceof HTMLButtonElement) {
-    els.guideShortcutsCopy.dataset.copyUrl = guide.shortcutsUrl;
-  }
-  if (els.guideExtensionNote) {
-    els.guideExtensionNote.textContent = guide.note;
-  }
-}
-
-function getCurrentBrowserGuide() {
-  if (isEdgeBrowser()) {
-    return EXTENSION_GUIDES.edge;
-  }
-  return EXTENSION_GUIDES.chrome;
-}
-
-function isEdgeBrowser() {
-  return /\bEdg\//.test(navigator.userAgent);
-}
-
 function getAppVariant() {
   return resolveAppVariant(window.location.pathname);
-}
-
-function getBrowserNameForUrl(url) {
-  if (url.startsWith("edge://")) {
-    return EXTENSION_GUIDES.edge.browserName;
-  }
-  if (url.startsWith("chrome://")) {
-    return EXTENSION_GUIDES.chrome.browserName;
-  }
-  return "ブラウザ";
 }
 
 function showGuideModal() {
@@ -927,29 +834,6 @@ function closeGuideModal() {
   els.guideModal.hidden = true;
   document.body.classList.remove("modal-open");
   els.openGuide.focus();
-}
-
-async function copyGuideUrl(button) {
-  const url = button.dataset.copyUrl;
-  if (!url) {
-    return;
-  }
-
-  const originalText = button.textContent;
-  const browserName = getBrowserNameForUrl(url);
-  try {
-    await navigator.clipboard.writeText(url);
-    button.textContent = "コピー済み";
-    setStatus(`${url} をコピーしました。${browserName}のアドレスバーに貼り付けて開いてください。`);
-  } catch (error) {
-    console.error(error);
-    button.textContent = "コピー失敗";
-    setStatus(`コピーできませんでした。表示されているURLを${browserName}のアドレスバーに入力してください。`, true);
-  }
-
-  window.setTimeout(() => {
-    button.textContent = originalText;
-  }, 1600);
 }
 
 function showMakerModal() {
@@ -2542,28 +2426,6 @@ function makerSvgToPngBlob() {
 function createMakerImageFileName() {
   const timestamp = new Date().toISOString().replace(/\D/g, "").slice(0, 14);
   return `made-kanpe-${timestamp}.png`;
-}
-
-// Chrome / Edge拡張機能のショートカットから届くコマンドをアプリ操作へ変換する。
-function handleExtensionMessage(event) {
-  if (event.source !== window || event.origin !== window.location.origin) {
-    return;
-  }
-
-  const data = event.data;
-  if (!data || data.source !== "pip-kanpe-hotkeys" || data.type !== "command") {
-    return;
-  }
-
-  if (data.command === "next") {
-    nextCard();
-    setStatus("拡張機能ショートカット: 次のカンペへ");
-  }
-
-  if (data.command === "previous") {
-    previousCard();
-    setStatus("拡張機能ショートカット: 前のカンペへ");
-  }
 }
 
 function updateSupportBadge() {
