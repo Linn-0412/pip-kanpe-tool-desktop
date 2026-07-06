@@ -58,19 +58,19 @@ beta:
 https://github.com/Linn-0412/pip-kanpe-tool-desktop/releases/latest/download/latest-beta.json
 ```
 
-Tauri のアップデーターは署名検証が必須です。`src-tauri/tauri.conf.json` の `TAURI_UPDATER_PUBLIC_KEY_PLACEHOLDER` は、リリース前に実際の公開鍵へ差し替えてください。
+Tauri のアップデーターは署名検証が必須です。`src-tauri/tauri.conf.json` には公開鍵だけを設定し、秘密鍵はリポジトリに含めません。
 
 鍵生成:
 
 ```bash
-npm run tauri signer generate -- -w ~/.tauri/pip-kanpe-tool-desktop.key
+npm run tauri -- signer generate --ci -p "<password>" -w ~/.tauri/pip-kanpe-tool-desktop.key
 ```
 
 Windows PowerShell でビルド時に秘密鍵を指定:
 
 ```powershell
-$env:TAURI_SIGNING_PRIVATE_KEY="C:\Users\<user>\.tauri\pip-kanpe-tool-desktop.key"
-$env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD=""
+$env:TAURI_SIGNING_PRIVATE_KEY=Get-Content "C:\Users\<user>\.tauri\pip-kanpe-tool-desktop.key" -Raw
+$env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD="<password>"
 npm run tauri:build
 ```
 
@@ -84,6 +84,6 @@ npm run tauri:build:beta
 ## 次にやること
 
 - Rust / Cargo を導入して `npm run tauri:dev` を確認
-- 実際の updater 署名鍵を生成し、公開鍵を `tauri.conf.json` に設定
+- GitHub Actions で署名鍵を Secrets 管理し、公開鍵と一致するキーで更新成果物を署名
 - GitHub Actions で Windows 向けビルドと Release asset アップロードを自動化
 - アプリ内に更新確認ボタンまたは起動時更新通知を追加
