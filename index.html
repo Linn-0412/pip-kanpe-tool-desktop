@@ -1,0 +1,449 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#111111">
+    <title>PiP カンペツール</title>
+    <link rel="icon" href="./favicon.jpg" type="image/jpeg">
+    <link rel="stylesheet" href="./styles.css?v=1.9.0-beta.13">
+    <script type="module" src="./app.js?v=1.9.0-beta.13"></script>
+  </head>
+  <body>
+    <header class="app-header">
+      <div>
+        <p class="eyebrow">Local image deck / Document PiP</p>
+        <h1>PiP カンペツール</h1>
+      </div>
+      <div class="header-actions">
+        <span id="variant-badge" class="variant-badge" hidden>β版</span>
+        <span id="support-badge" class="support-badge">確認中</span>
+        <a class="secondary-button support-link" href="https://ofuse.me/linn0412" target="_blank" rel="noopener">支援する</a>
+        <button id="open-guide" class="secondary-button" type="button">使い方</button>
+        <button id="open-pip" class="primary-button" type="button">PiPで表示</button>
+      </div>
+    </header>
+
+    <main class="app-shell">
+      <section class="deck-panel" aria-label="カンペ管理">
+        <div id="drop-zone" class="drop-zone" tabindex="0">
+          <input id="file-input" type="file" accept="image/*" multiple hidden>
+          <div>
+            <strong>画像を追加</strong>
+            <span>複数選択、ドロップ、またはCtrl+Vで貼り付け</span>
+          </div>
+          <button id="pick-files" class="secondary-button" type="button">選択</button>
+        </div>
+
+        <div class="settings-row">
+          <label class="check-option">
+            <input id="optimize-images" type="checkbox" checked>
+            <span>保存時に長辺2048pxへ軽量化</span>
+          </label>
+        </div>
+
+        <button id="open-maker" class="secondary-button maker-open-button" type="button">カンペを作る（β）</button>
+
+        <details class="group-settings deck-tools" aria-label="カンペセット操作">
+          <summary>カンペセット</summary>
+          <div class="group-settings-body deck-tools-body">
+            <div>
+              <strong>カンペセット</strong>
+              <span>登録画像、並び順、グループ、PiP表示設定をまとめて保存・読み込みできます。</span>
+            </div>
+            <div class="deck-tool-actions">
+              <button id="export-deck" class="secondary-button" type="button">エクスポート</button>
+              <button id="import-deck" class="secondary-button" type="button">インポート</button>
+              <input id="deck-import-input" type="file" accept=".pipkanpe,application/json" hidden>
+            </div>
+          </div>
+        </details>
+
+        <div class="group-panel" aria-label="グループ管理">
+          <label class="group-field">
+            <span>表示グループ</span>
+            <select id="group-filter"></select>
+          </label>
+          <details class="group-settings">
+            <summary>グループ設定</summary>
+            <div class="group-settings-body">
+              <label class="group-field">
+                <span>グループ名</span>
+                <input id="group-name" type="text" maxlength="24" placeholder="例: 絶ケフカ 野良">
+              </label>
+              <div class="group-actions">
+                <button id="add-group" class="secondary-button" type="button">追加</button>
+                <button id="rename-group" class="secondary-button" type="button">名前変更</button>
+                <button id="delete-group" class="danger-button" type="button">削除</button>
+              </div>
+              <small>選択中のグループで画像を追加すると、そのグループに自動で入ります。</small>
+            </div>
+          </details>
+        </div>
+
+        <div id="beta-feedback" class="beta-feedback" aria-label="β版フィードバック" hidden>
+          <div>
+            <strong>β版フィードバック</strong>
+            <span>気づいたことや不具合は、GitHub IssueまたはOFUSEコメントへお願いします。</span>
+          </div>
+          <div class="feedback-links">
+            <a href="https://github.com/Linn-0412/pip-kanpe-tool/issues/new?template=beta-test-checklist.md" target="_blank" rel="noopener">GitHub Issue</a>
+            <a href="https://ofuse.me/linn0412" target="_blank" rel="noopener">OFUSE</a>
+          </div>
+        </div>
+
+        <div class="list-header">
+          <div>
+            <h2>登録画像</h2>
+            <p id="deck-meta">0 / 80</p>
+          </div>
+          <button id="clear-all" class="danger-button" type="button">全削除</button>
+        </div>
+
+        <div id="thumb-list" class="thumb-list" aria-live="polite"></div>
+      </section>
+
+      <section class="viewer-panel" aria-label="プレビュー">
+        <div id="preview-stage" class="preview-stage">
+          <div id="preview-pip-controls" class="pip-controls preview-pip-controls">
+            <button id="preview-pip-prev" class="pip-button" type="button" aria-label="前の画像">←</button>
+            <div id="preview-pip-label" class="pip-label"></div>
+            <button id="preview-pip-next" class="pip-button" type="button" aria-label="次の画像">→</button>
+          </div>
+
+          <div id="empty-state" class="empty-state">
+            <strong>攻略中に見たい画像を登録してください</strong>
+            <span>PiP小窓の左右ボタン、またはこの画面の←→で切り替えできます。</span>
+          </div>
+          <img id="preview-image" alt="">
+        </div>
+
+        <div class="viewer-options">
+          <label>
+            表示
+            <select id="fit-mode">
+              <option value="contain">全体を表示</option>
+              <option value="cover">画面いっぱい</option>
+            </select>
+          </label>
+          <label>
+            PiPサイズ
+            <select id="pip-size">
+              <option value="480x270">480 x 270</option>
+              <option value="640x360" selected>640 x 360</option>
+              <option value="800x450">800 x 450</option>
+              <option value="960x540">960 x 540</option>
+            </select>
+          </label>
+        </div>
+
+        <details class="group-settings advanced-settings">
+          <summary>PiP詳細設定</summary>
+          <div class="settings-row pip-settings">
+            <div class="settings-stack">
+              <span class="settings-title">矢印と画像名の表示位置</span>
+              <div class="settings-choice-group" role="radiogroup" aria-label="矢印と画像名の表示位置">
+                <label class="check-option">
+                  <input id="pip-controls-position-top" type="radio" name="pip-controls-position" value="top">
+                  <span>上部</span>
+                </label>
+                <label class="check-option">
+                  <input id="pip-controls-position-middle" type="radio" name="pip-controls-position" value="middle">
+                  <span>中央</span>
+                </label>
+                <label class="check-option">
+                  <input id="pip-controls-position-bottom" type="radio" name="pip-controls-position" value="bottom">
+                  <span>下部</span>
+                </label>
+              </div>
+            </div>
+
+            <div class="settings-stack">
+              <span class="settings-title">矢印と画像名の大きさ</span>
+              <div class="settings-choice-group" role="radiogroup" aria-label="矢印と画像名の大きさ">
+                <label class="check-option">
+                  <input id="pip-controls-size-small" type="radio" name="pip-controls-size" value="small">
+                  <span>小</span>
+                </label>
+                <label class="check-option">
+                  <input id="pip-controls-size-medium" type="radio" name="pip-controls-size" value="medium" checked>
+                  <span>中</span>
+                </label>
+                <label class="check-option">
+                  <input id="pip-controls-size-large" type="radio" name="pip-controls-size" value="large">
+                  <span>大</span>
+                </label>
+              </div>
+            </div>
+
+            <div class="settings-stack">
+              <span class="settings-title">矢印ボタンの配置</span>
+              <div class="settings-choice-group" role="radiogroup" aria-label="矢印ボタンの配置">
+                <label class="check-option">
+                  <input id="pip-controls-placement-horizontal" type="radio" name="pip-controls-placement" value="horizontal" checked>
+                  <span>横並び</span>
+                </label>
+                <label class="check-option">
+                  <input id="pip-controls-placement-vertical-left" type="radio" name="pip-controls-placement" value="vertical-left">
+                  <span>左に縦並び</span>
+                </label>
+                <label class="check-option">
+                  <input id="pip-controls-placement-vertical-right" type="radio" name="pip-controls-placement" value="vertical-right">
+                  <span>右に縦並び</span>
+                </label>
+              </div>
+              <label class="check-option">
+                <input id="pip-controls-full-height-buttons" type="checkbox">
+                <span>矢印の当たり判定を縦いっぱいにする</span>
+              </label>
+            </div>
+
+            <div class="settings-stack">
+              <span class="settings-title">背景の濃さ</span>
+              <div class="settings-choice-group" role="radiogroup" aria-label="矢印と画像名の背景の濃さ">
+                <label class="check-option">
+                  <input id="pip-controls-background-solid" type="radio" name="pip-controls-background" value="solid" checked>
+                  <span>通常</span>
+                </label>
+                <label class="check-option">
+                  <input id="pip-controls-background-translucent" type="radio" name="pip-controls-background" value="translucent">
+                  <span>薄め</span>
+                </label>
+                <label class="check-option">
+                  <input id="pip-controls-background-clear" type="radio" name="pip-controls-background" value="clear">
+                  <span>透明</span>
+                </label>
+              </div>
+              <small class="settings-hint">透明は画像に重ねると効果が見えます。</small>
+            </div>
+
+            <div class="settings-stack">
+              <label class="check-option">
+                <input id="pip-controls-separate" type="checkbox" checked>
+                <span>コントロールパネルを画像に重ねない</span>
+              </label>
+
+              <label class="check-option">
+                <input id="pip-controls-auto-hide" type="checkbox" checked>
+                <span>マウス操作時だけ表示する</span>
+              </label>
+
+              <label class="check-option">
+                <input id="show-pip-label" type="checkbox" checked>
+                <span>画像名と枚数を表示する</span>
+              </label>
+
+              <label class="check-option">
+                <input id="show-file-extension" type="checkbox">
+                <span>画像名の拡張子を表示する</span>
+              </label>
+            </div>
+          </div>
+        </details>
+
+        <p id="status-line" class="status-line" role="status"></p>
+      </section>
+    </main>
+
+    <div id="guide-modal" class="guide-backdrop" role="dialog" aria-modal="true" aria-labelledby="guide-title" hidden>
+      <section class="guide-dialog">
+        <div class="guide-header">
+          <div>
+            <p class="eyebrow">Quick guide</p>
+            <h2 id="guide-title">使い方ガイド</h2>
+          </div>
+          <button id="close-guide-icon" class="mini-button" type="button" aria-label="使い方ガイドを閉じる">×</button>
+        </div>
+
+        <ol class="guide-steps">
+          <li>
+            <strong>画像を登録</strong>
+            <span>カンペ画像を複数選択、画像追加エリアへドロップ、または画像をコピーした状態でCtrl+Vを押して登録します。複数選択時はファイル名順で追加します。大量に登録する場合は「保存時に長辺2048pxへ軽量化」をオンにしておくと軽くなります。</span>
+          </li>
+          <li>
+            <strong>グループで分ける</strong>
+            <span>グループ名を入力して追加すると、画像を攻略や固定/野良ごとに絞り込めます。選択中のグループで画像を追加すると自動で所属し、既存画像はカード下のチェックで所属を切り替えられます。</span>
+          </li>
+          <li>
+            <strong>順番を整える</strong>
+            <span>カードをクリックするとプレビューに表示します。登録画像リストの ↑ / ↓ で攻略順に並び替え、不要な画像は × で削除、目アイコンを押すとプレビュー/PiPの切り替え対象から一時的に除外できます（リストには残り、もう一度押すと再表示）。</span>
+          </li>
+          <li>
+            <strong>PiPで表示</strong>
+            <span>Chrome / Edgeで「PiPで表示」を押すと、小窓に現在のカンペを表示します。</span>
+          </li>
+          <li>
+            <strong>ゲーム中に切り替える</strong>
+            <span>PiP小窓の ← / →、またはChrome / Edge拡張のショートカットで前後のカンペへ切り替えます。FF14の表示モードごとのPiP表示可否は次の通りです。</span>
+            <dl class="guide-mode-list">
+              <div>
+                <dt>フルスクリーン</dt>
+                <dd class="unavailable">表示不可</dd>
+              </div>
+              <div>
+                <dt>仮想フルスクリーン</dt>
+                <dd>表示可能</dd>
+              </div>
+              <div>
+                <dt>ウィンドウモード</dt>
+                <dd>表示可能</dd>
+              </div>
+            </dl>
+          </li>
+          <li>
+            <strong>ショートカットを使う場合</strong>
+            <ol class="guide-substeps">
+              <li><a id="guide-extension-download-link" class="guide-link" href="https://github.com/Linn-0412/pip-kanpe-tool/releases/latest/download/pip-kanpe-tool-hotkeys-extension.zip" target="_blank" rel="noopener">こちらからChrome / Edge用拡張機能ZIPをダウンロード</a>して解凍します。</li>
+              <li>
+                <span id="guide-extensions-instruction">Chromeの拡張機能画面（chrome://extensions/）を開き、デベロッパーモードをオンにします。</span>
+                <button id="guide-extensions-copy" class="copy-url-button" type="button" data-copy-url="chrome://extensions/">URLをコピー</button>
+              </li>
+              <li id="guide-load-unpacked-instruction">「パッケージ化されていない拡張機能を読み込む」から、解凍したフォルダを選びます。</li>
+              <li>
+                <span id="guide-shortcuts-instruction">ショートカット設定画面（chrome://extensions/shortcuts）でキー設定を確認します。</span>
+                <button id="guide-shortcuts-copy" class="copy-url-button" type="button" data-copy-url="chrome://extensions/shortcuts">URLをコピー</button>
+              </li>
+            </ol>
+            <small id="guide-extension-note" class="guide-note">※ 初期設定は「Ctrl+Shift+8」が前、「Ctrl+Shift+9」が次です。FF14のキーバインドと衝突する場合はショートカット設定画面で別のキーに変更してください。</small>
+          </li>
+        </ol>
+
+        <label class="check-option guide-check">
+          <input id="hide-guide-next-time" type="checkbox">
+          <span>次回以降表示しない</span>
+        </label>
+
+        <div class="guide-actions">
+          <button id="close-guide" class="primary-button" type="button">はじめる</button>
+        </div>
+      </section>
+    </div>
+
+    <div id="maker-modal" class="maker-backdrop" role="dialog" aria-modal="true" aria-labelledby="maker-title" hidden>
+      <section class="maker-dialog">
+        <div class="maker-header">
+          <div>
+            <p class="eyebrow">Beta editor</p>
+            <h2 id="maker-title">カンペを作る</h2>
+          </div>
+          <button id="close-maker" class="mini-button" type="button" aria-label="カンペ作成を閉じる">×</button>
+        </div>
+
+        <div class="maker-workspace">
+          <aside class="maker-tools" aria-label="作成ツール">
+            <label class="maker-field">
+              <span>背景</span>
+              <select id="maker-background">
+                <option value="dark" selected>黒背景</option>
+                <option value="light">白背景</option>
+                <option value="transparent">透明</option>
+                <optgroup label="フィールド">
+                  <option value="yosei-p1">絶妖星乱舞 P1</option>
+                  <option value="yosei-p2">絶妖星乱舞 P2</option>
+                  <option value="yosei-p3">絶妖星乱舞 P3</option>
+                  <option value="yosei-p4">絶妖星乱舞 P4</option>
+                  <option value="yosei-p5">絶妖星乱舞 P5</option>
+                </optgroup>
+              </select>
+            </label>
+
+            <label class="maker-field">
+              <span>色</span>
+              <input id="maker-color" type="color" value="#ffd166">
+            </label>
+
+            <div class="maker-transform-controls" aria-label="選択中パーツの調整">
+              <label class="maker-field">
+                <span>大きさ <output id="maker-size-value" for="maker-size">100%</output></span>
+                <input id="maker-size" type="range" min="50" max="180" step="5" value="100" disabled>
+              </label>
+              <label class="maker-field">
+                <span>横幅 <output id="maker-width-value" for="maker-width-scale">100%</output></span>
+                <input id="maker-width-scale" type="range" min="25" max="1000" step="5" value="100" disabled>
+              </label>
+              <label class="maker-field">
+                <span>縦幅 <output id="maker-height-value" for="maker-height-scale">100%</output></span>
+                <input id="maker-height-scale" type="range" min="25" max="1000" step="5" value="100" disabled>
+              </label>
+              <label class="maker-field">
+                <span>向き <output id="maker-rotation-value" for="maker-rotation">0°</output></span>
+                <input id="maker-rotation" type="range" min="-180" max="180" step="5" value="0" disabled>
+              </label>
+              <button id="maker-reset-transform" class="secondary-button" type="button" disabled>大きさ/向きを戻す</button>
+            </div>
+
+            <div class="maker-tool-section">
+              <span>図形</span>
+              <div class="maker-button-grid">
+                <button class="secondary-button" type="button" data-maker-add="circle">円</button>
+                <button class="secondary-button" type="button" data-maker-add="rect">四角</button>
+                <button class="secondary-button" type="button" data-maker-add="line">線</button>
+                <button class="secondary-button" type="button" data-maker-add="boss">ボス</button>
+                <button class="secondary-button" type="button" data-maker-add="arrow-up">↑</button>
+                <button class="secondary-button" type="button" data-maker-add="arrow-down">↓</button>
+                <button class="secondary-button" type="button" data-maker-add="arrow-left">←</button>
+                <button class="secondary-button" type="button" data-maker-add="arrow-right">→</button>
+              </div>
+            </div>
+
+            <div class="maker-tool-section">
+              <span>マーカー</span>
+              <div id="maker-field-markers" class="maker-button-grid marker-grid"></div>
+            </div>
+
+            <div class="maker-tool-section">
+              <span>ギミック</span>
+              <div id="maker-gimmicks" class="maker-button-grid gimmick-grid"></div>
+            </div>
+
+            <div class="maker-tool-section">
+              <span>ロール</span>
+              <div class="maker-button-grid role-grid">
+                <button class="secondary-button" type="button" data-maker-label="MT">MT</button>
+                <button class="secondary-button" type="button" data-maker-label="ST">ST</button>
+                <button class="secondary-button" type="button" data-maker-label="H1">H1</button>
+                <button class="secondary-button" type="button" data-maker-label="H2">H2</button>
+                <button class="secondary-button" type="button" data-maker-label="D1">D1</button>
+                <button class="secondary-button" type="button" data-maker-label="D2">D2</button>
+                <button class="secondary-button" type="button" data-maker-label="D3">D3</button>
+                <button class="secondary-button" type="button" data-maker-label="D4">D4</button>
+              </div>
+            </div>
+
+            <div class="maker-tool-section">
+              <span>ジョブアイコン</span>
+              <div id="maker-job-icons" class="maker-button-grid job-icon-grid"></div>
+            </div>
+
+            <label class="maker-field">
+              <span>テキスト</span>
+              <input id="maker-text" type="text" maxlength="24" placeholder="例: 外周へ">
+            </label>
+            <button id="maker-add-text" class="secondary-button" type="button">テキスト追加</button>
+
+            <div class="maker-actions">
+              <button id="maker-delete" class="danger-button" type="button">選択を削除</button>
+              <button id="maker-clear" class="danger-button" type="button">全クリア</button>
+              <button id="maker-save" class="primary-button" type="button">画像として登録</button>
+            </div>
+          </aside>
+
+          <div class="maker-stage-wrap">
+            <svg id="maker-canvas" class="maker-canvas" viewBox="0 0 1024 1024" role="img" aria-label="カンペ作成キャンバス" tabindex="0">
+              <defs>
+                <pattern id="maker-grid-pattern" width="80" height="80" patternUnits="userSpaceOnUse">
+                  <path d="M 80 0 L 0 0 0 80" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="2" />
+                </pattern>
+              </defs>
+              <rect id="maker-background-rect" width="1024" height="1024" rx="24"></rect>
+              <rect id="maker-grid" width="1024" height="1024" rx="24" fill="url(#maker-grid-pattern)"></rect>
+              <image id="maker-field-background-image" x="0" y="0" width="1024" height="1024" preserveAspectRatio="xMidYMid slice" hidden></image>
+              <g id="maker-items"></g>
+            </svg>
+            <p class="maker-hint">素材を追加してドラッグで配置します。完成したら登録画像に追加できます。</p>
+          </div>
+        </div>
+      </section>
+    </div>
+  </body>
+</html>
