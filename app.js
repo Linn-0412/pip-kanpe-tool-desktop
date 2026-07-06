@@ -42,6 +42,7 @@ const DB_NAME = IS_BETA ? "pip-kanpe-tool-beta" : "pip-kanpe-tool";
 const DB_VERSION = 1;
 const IMAGE_STORE = "images";
 const SETTINGS_KEY = IS_BETA ? "pip-kanpe-settings-beta" : "pip-kanpe-settings";
+const DESKTOP_STORE_VERSION = 1;
 const DECK_EXPORT_SETTING_KEYS = [
   "fitMode",
   "pipSize",
@@ -194,6 +195,7 @@ const JOB_ICON_ASSETS = [
 // メモリ上の唯一の状態。IndexedDBの画像本体、localStorageの設定、PiP小窓をここで束ねる。
 const state = {
   db: null,
+  desktopStore: null,
   cards: [],
   currentIndex: 0,
   objectUrls: new Map(),
@@ -240,7 +242,13 @@ async function init() {
   updateVariantBadge();
 
   try {
-    loadSettings();
+    if (isDesktopApp()) {
+      state.desktopStore = await loadDesktopStore();
+      applyStoredSettings(state.desktopStore.settings);
+      await hydrateDesktopInfo();
+    } else {
+      loadSettings();
+    }
     applySettingsToControls();
   } catch (error) {
     console.error(error);
@@ -252,14 +260,38 @@ async function init() {
     state.cards = await loadCards();
     normalizeCurrentIndex();
     render();
-    setStatus("準備完了。画像はこのブラウザ内だけに保存されます。");
+    setStatus(isDesktopApp() ? "準備完了。データはこのPCのアプリデータに保存されます。" : "準備完了。画像はこのブラウザ内だけに保存されます。");
   } catch (error) {
     console.error(error);
-    setStatus("IndexedDBを開けませんでした。ブラウザ設定を確認してください。", true);
+    setStatus(isDesktopApp() ? "デスクトップ保存領域を開けませんでした。アプリを再起動してください。" : "IndexedDBを開けませんでした。ブラウザ設定を確認してください。", true);
   }
 }
 
 // HTMLのidをcamelCase化してelsへ集約する。イベント側でquerySelectorを散らさないための入口。
+function isDesktopApp() {
+  return Boolean(window.__TAURI__?.core?.invoke);
+}
+
+async function invokeDesktop(command, payload = {}) {
+  if (!isDesktopApp()) {
+    throw new Error("Tauri API is unavailable");
+  }
+  return window.__TAURI__.core.invoke(command, payload);
+}
+
+async function loadDesktopStore() {
+  return invokeDesktop("load_store");
+}
+
+async function hydrateDesktopInfo() {
+  try {
+    const info = await invokeDesktop("get_desktop_info");
+    console.info("PiP Kanpe Tool Desktop", info);
+  } catch (error) {
+    console.warn("Desktop info unavailable", error);
+  }
+}
+
 function bindElements() {
   const ids = [
     "variant-badge",
@@ -2393,6 +2425,10 @@ function updateVariantBadge() {
 
 // 画像本体はIndexedDBに保存する。サーバーへアップロードしないための中核。
 function openDatabase() {
+  if (isDesktopApp()) {
+    return Promise.resolve({ kind: "desktop" });
+  }
+
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
 
@@ -2409,6 +2445,10 @@ function openDatabase() {
 }
 
 function loadCards() {
+  if (isDesktopApp()) {
+    return loadDesktopCards();
+  }
+
   return new Promise((resolve, reject) => {
     const store = getImageStore("readonly");
     const request = store.getAll();
@@ -2429,6 +2469,10 @@ function loadCards() {
 }
 
 function putCard(card) {
+  if (isDesktopApp()) {
+    return putDesktopCard(card);
+  }
+
   return new Promise((resolve, reject) => {
     const store = getImageStore("readwrite");
     const request = store.put(card);
@@ -2439,6 +2483,10 @@ function putCard(card) {
 }
 
 function deleteCardFromDb(id) {
+  if (isDesktopApp()) {
+    return persistDesktopStore(state.cards.filter((card) => card.id !== id));
+  }
+
   return new Promise((resolve, reject) => {
     const store = getImageStore("readwrite");
     const request = store.delete(id);
@@ -2449,6 +2497,10 @@ function deleteCardFromDb(id) {
 }
 
 function clearImageStore() {
+  if (isDesktopApp()) {
+    return persistDesktopStore([]);
+  }
+
   return new Promise((resolve, reject) => {
     const store = getImageStore("readwrite");
     const request = store.clear();
@@ -2458,7 +2510,70 @@ function clearImageStore() {
   });
 }
 
+async function loadDesktopCards() {
+  const cards = Array.isArray(state.desktopStore?.cards) ? state.desktopStore.cards : [];
+  return cards
+    .map((card, index) => {
+      const blob = dataUrlToBlob(card.dataUrl, card.type || "image/png");
+      return {
+        ...card,
+        type: card.type || blob.type || "image/png",
+        size: Number(card.size || blob.size || 0),
+        originalSize: Number(card.originalSize || card.size || blob.size || 0),
+        order: Number.isFinite(Number(card.order)) ? Number(card.order) : index,
+        hidden: Boolean(card.hidden),
+        groupIds: normalizeCardGroupIds(card.groupIds),
+        createdAt: Number(card.createdAt || Date.now()),
+        blob,
+      };
+    })
+    .sort((a, b) => a.order - b.order);
+}
+
+async function putDesktopCard(card) {
+  const exists = state.cards.some((currentCard) => currentCard.id === card.id);
+  const nextCards = exists
+    ? state.cards.map((currentCard) => (currentCard.id === card.id ? card : currentCard))
+    : [...state.cards, card];
+
+  await persistDesktopStore(nextCards);
+}
+
+async function persistDesktopStore(cards = state.cards) {
+  if (!isDesktopApp() || !state.db) {
+    return;
+  }
+
+  const payload = {
+    version: DESKTOP_STORE_VERSION,
+    settings: state.settings,
+    cards: await Promise.all(cards.map((card, index) => serializeDesktopCard(card, index))),
+  };
+
+  await invokeDesktop("save_store", { payload });
+  state.desktopStore = payload;
+}
+
+async function serializeDesktopCard(card, index) {
+  return {
+    id: card.id,
+    name: card.name,
+    type: card.type || card.blob?.type || "image/png",
+    size: card.size || card.blob?.size || 0,
+    originalSize: card.originalSize || card.size || card.blob?.size || 0,
+    order: Number.isFinite(Number(card.order)) ? Number(card.order) : index,
+    hidden: Boolean(card.hidden),
+    groupIds: normalizeCardGroupIds(card.groupIds),
+    createdAt: card.createdAt || Date.now(),
+    dataUrl: await blobToDataUrl(card.blob),
+  };
+}
+
 function getImageStore(mode) {
+  if (isDesktopApp()) {
+    throw new Error("Desktop storage does not use IndexedDB object stores.");
+  }
+
   return state.db.transaction(IMAGE_STORE, mode).objectStore(IMAGE_STORE);
 }
 
@@ -3796,7 +3911,7 @@ function loadSettings() {
   try {
     const raw = localStorage.getItem(SETTINGS_KEY);
     if (raw) {
-      state.settings = { ...state.settings, ...JSON.parse(raw) };
+      applyStoredSettings(JSON.parse(raw));
     }
   } catch (error) {
     console.warn("Settings load failed", error);
@@ -3806,7 +3921,22 @@ function loadSettings() {
 }
 
 function saveSettings() {
+  if (isDesktopApp()) {
+    persistDesktopStore().catch((error) => {
+      console.warn("Desktop settings save failed", error);
+    });
+    return;
+  }
+
   localStorage.setItem(SETTINGS_KEY, JSON.stringify(state.settings));
+}
+
+function applyStoredSettings(settings) {
+  if (settings && typeof settings === "object") {
+    state.settings = { ...state.settings, ...settings };
+  }
+
+  normalizeSettingsGroups();
 }
 
 // 保存済み設定をフォームへ反映する。初回ガイド表示の判定もここで行う。

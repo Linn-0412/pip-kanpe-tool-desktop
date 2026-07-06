@@ -1,0 +1,12 @@
+{
+  "productName": "PiP Kanpe Tool Beta",
+  "identifier": "com.linn0412.pip-kanpe-tool-desktop.beta",
+  "plugins": {
+    "updater": {
+      "endpoints": [
+        "https://github.com/Linn-0412/pip-kanpe-tool-desktop/releases/latest/download/latest-beta.json"
+      ]
+    }
+  }
+}
+

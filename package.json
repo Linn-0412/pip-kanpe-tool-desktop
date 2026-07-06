@@ -4,7 +4,20 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "check": "node --check app.js && node --check core.js",
+    "build:web": "node scripts/build-web.mjs",
+    "check": "node --check app.js && node --check core.js && node --check scripts/build-web.mjs && node --check scripts/dev-server.mjs",
+    "dev:web": "node scripts/dev-server.mjs",
+    "tauri": "tauri",
+    "tauri:dev": "tauri dev",
+    "tauri:build": "tauri build",
+    "tauri:build:beta": "tauri build --config src-tauri/tauri.beta.conf.json",
     "test": "node --test"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.11.4"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2.11.1",
+    "@tauri-apps/plugin-updater": "^2.10.1"
   }
 }

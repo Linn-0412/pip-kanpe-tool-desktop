@@ -1,0 +1,12 @@
+{
+  "version": "0.1.0-beta.0",
+  "notes": "Initial beta desktop release.",
+  "pub_date": "2026-07-06T00:00:00Z",
+  "platforms": {
+    "windows-x86_64": {
+      "signature": "PASTE_CONTENT_OF_GENERATED_SIG_FILE",
+      "url": "https://github.com/Linn-0412/pip-kanpe-tool-desktop/releases/download/v0.1.0-beta.0/PiP.Kanpe.Tool.Beta_0.1.0-beta.0_x64-setup.exe"
+    }
+  }
+}
+
