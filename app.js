@@ -606,6 +606,8 @@ function bindEvents() {
   els.pipSize.addEventListener("change", () => {
     state.settings.pipSize = els.pipSize.value;
     saveSettings();
+    resizeDesktopPipWindow();
+    updatePip();
   });
 
   [els.pipControlsSizeSmall, els.pipControlsSizeMedium, els.pipControlsSizeLarge].forEach((radio) => {
@@ -3505,7 +3507,7 @@ async function openDesktopPip() {
   }
 
   try {
-    const [width, height] = state.settings.pipSize.split("x").map(Number);
+    const { width, height } = getPipWindowSize();
     await invokeDesktop("open_pip_window", { options: { width, height } });
     state.desktopPipOpen = true;
     await syncDesktopPipWindow();
@@ -3513,6 +3515,21 @@ async function openDesktopPip() {
   } catch (error) {
     console.error(error);
     setStatus("Tauri版PiP小窓を開けませんでした。もう一度試してください。", true);
+  }
+}
+
+async function resizeDesktopPipWindow() {
+  if (!isDesktopApp() || !state.desktopPipOpen) {
+    return;
+  }
+
+  try {
+    const resized = await invokeDesktop("resize_pip_window", { options: getPipWindowSize() });
+    if (!resized) {
+      state.desktopPipOpen = false;
+    }
+  } catch (error) {
+    console.warn("Desktop PiP resize failed", error);
   }
 }
 
@@ -3648,6 +3665,11 @@ function updatePip() {
   const multipleVisible = getVisibleIndices().length > 1;
   prev.disabled = !multipleVisible;
   next.disabled = !multipleVisible;
+}
+
+function getPipWindowSize() {
+  const [width = 640, height = 360] = state.settings.pipSize.split("x").map(Number);
+  return { width, height };
 }
 
 async function syncDesktopPipWindow() {

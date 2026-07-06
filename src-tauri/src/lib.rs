@@ -160,8 +160,7 @@ fn save_store(app: tauri::AppHandle, mut payload: DesktopStore) -> Result<(), St
 
 #[tauri::command]
 async fn open_pip_window(app: tauri::AppHandle, options: PipWindowOptions) -> Result<(), String> {
-    let width = options.width.clamp(320.0, 1280.0);
-    let height = options.height.clamp(180.0, 720.0);
+    let (width, height) = clamp_pip_window_size(&options);
 
     if let Some(window) = app.get_webview_window(PIP_WINDOW_LABEL) {
         window
@@ -191,6 +190,23 @@ async fn open_pip_window(app: tauri::AppHandle, options: PipWindowOptions) -> Re
     .map_err(|error| format!("Failed to create PiP window: {error}"))?;
 
     Ok(())
+}
+
+#[tauri::command]
+fn resize_pip_window(app: tauri::AppHandle, options: PipWindowOptions) -> Result<bool, String> {
+    let Some(window) = app.get_webview_window(PIP_WINDOW_LABEL) else {
+        return Ok(false);
+    };
+
+    let (width, height) = clamp_pip_window_size(&options);
+    window
+        .set_size(tauri::Size::Logical(tauri::LogicalSize::new(width, height)))
+        .map_err(|error| format!("Failed to resize PiP window: {error}"))?;
+    Ok(true)
+}
+
+fn clamp_pip_window_size(options: &PipWindowOptions) -> (f64, f64) {
+    (options.width.clamp(320.0, 1280.0), options.height.clamp(180.0, 720.0))
 }
 
 #[tauri::command]
@@ -508,6 +524,7 @@ pub fn run() {
             open_support_url,
             open_pip_window,
             request_pip_snapshot,
+            resize_pip_window,
             save_store,
             set_navigation_shortcuts,
             step_pip_card,

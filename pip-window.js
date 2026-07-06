@@ -1,6 +1,7 @@
 const els = {};
 let ready = false;
 let pendingPayload = null;
+let currentPayload = null;
 
 window.__PIP_KANPE_RENDER__ = (payload) => {
   if (!ready) {
@@ -35,6 +36,7 @@ function bindElements() {
 function bindEvents() {
   els.pipPrev.addEventListener("click", () => stepCard(-1));
   els.pipNext.addEventListener("click", () => stepCard(1));
+  els.pipShell.addEventListener("click", handlePipHitAreaClick);
 }
 
 async function stepCard(direction) {
@@ -49,6 +51,7 @@ function renderPip(payload) {
     return;
   }
 
+  currentPayload = payload;
   document.title = payload.title || "PiP カンペ";
   applyControlClasses(payload.controls);
 
@@ -114,7 +117,54 @@ function updateButtonLabels(vertical) {
   els.pipNext.textContent = vertical ? "↓" : "→";
 }
 
+// 「矢印の当たり判定を縦いっぱいにする」用のクリック判定。
+// 見た目のボタンは小さいまま、矢印と同じ縦ラインを小窓全体の操作領域として扱う。
+function handlePipHitAreaClick(event) {
+  const controls = currentPayload?.controls;
+  if (!controls?.fullHeightButtons || !currentPayload?.canNavigate) {
+    return;
+  }
+
+  const target = event.target;
+  if (target && typeof target.closest === "function" && target.closest(".pip-button")) {
+    return;
+  }
+
+  const shellRect = els.pipShell.getBoundingClientRect();
+  const previousRect = els.pipPrev.getBoundingClientRect();
+  const nextRect = els.pipNext.getBoundingClientRect();
+  if (
+    shellRect.width <= 0 ||
+    shellRect.height <= 0 ||
+    previousRect.width <= 0 ||
+    nextRect.width <= 0
+  ) {
+    return;
+  }
+
+  if (controls.vertical) {
+    const laneLeft = Math.min(previousRect.left, nextRect.left);
+    const laneRight = Math.max(previousRect.right, nextRect.right);
+    if (event.clientX < laneLeft || event.clientX > laneRight) {
+      return;
+    }
+
+    event.preventDefault();
+    stepCard(event.clientY < shellRect.top + shellRect.height / 2 ? -1 : 1);
+    return;
+  }
+
+  if (event.clientX >= previousRect.left && event.clientX <= previousRect.right) {
+    event.preventDefault();
+    stepCard(-1);
+  } else if (event.clientX >= nextRect.left && event.clientX <= nextRect.right) {
+    event.preventDefault();
+    stepCard(1);
+  }
+}
+
 function showMessage(message) {
+  currentPayload = null;
   els.pipImage.style.display = "none";
   els.pipImage.removeAttribute("src");
   els.pipEmpty.style.display = "grid";
