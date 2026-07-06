@@ -6,8 +6,8 @@
     <meta name="theme-color" content="#111111">
     <title>PiP カンペツール</title>
     <link rel="icon" href="./favicon.jpg" type="image/jpeg">
-    <link rel="stylesheet" href="./styles.css?v=0.1.0">
-    <script type="module" src="./app.js?v=0.1.0"></script>
+    <link rel="stylesheet" href="./styles.css?v=0.1.1">
+    <script type="module" src="./app.js?v=0.1.1"></script>
   </head>
   <body>
     <header class="app-header">
@@ -18,7 +18,7 @@
       <div class="header-actions">
         <span id="variant-badge" class="variant-badge" hidden>β版</span>
         <span id="support-badge" class="support-badge">確認中</span>
-        <a class="secondary-button support-link" href="https://ofuse.me/linn0412" target="_blank" rel="noopener">支援する</a>
+        <a id="support-link" class="secondary-button support-link" href="https://ofuse.me/linn0412" target="_blank" rel="noopener">支援する</a>
         <button id="check-update" class="secondary-button update-button" type="button" hidden>更新を確認</button>
         <span id="update-status" class="update-status" hidden></span>
         <button id="open-guide" class="secondary-button" type="button">使い方</button>
@@ -249,11 +249,17 @@
             <div class="shortcut-grid">
               <label class="shortcut-field">
                 <span>前のカンペ</span>
-                <input id="shortcut-previous" type="text" value="Ctrl+F5" list="shortcut-presets" spellcheck="false" autocomplete="off">
+                <div class="shortcut-input-row">
+                  <input id="shortcut-previous" type="text" value="Ctrl+F5" list="shortcut-presets" spellcheck="false" autocomplete="off">
+                  <button id="capture-shortcut-previous" class="mini-button shortcut-capture-button" type="button">キー入力</button>
+                </div>
               </label>
               <label class="shortcut-field">
                 <span>次のカンペ</span>
-                <input id="shortcut-next" type="text" value="Ctrl+F6" list="shortcut-presets" spellcheck="false" autocomplete="off">
+                <div class="shortcut-input-row">
+                  <input id="shortcut-next" type="text" value="Ctrl+F6" list="shortcut-presets" spellcheck="false" autocomplete="off">
+                  <button id="capture-shortcut-next" class="mini-button shortcut-capture-button" type="button">キー入力</button>
+                </div>
               </label>
             </div>
             <datalist id="shortcut-presets">

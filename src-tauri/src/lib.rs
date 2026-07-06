@@ -12,6 +12,7 @@ const STORE_FILE_NAME: &str = "kanpe-store.json";
 const STORE_VERSION: u32 = 1;
 const DEFAULT_PREVIOUS_SHORTCUT: &str = "Ctrl+F5";
 const DEFAULT_NEXT_SHORTCUT: &str = "Ctrl+F6";
+const SUPPORT_URL: &str = "https://ofuse.me/linn0412";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -190,6 +191,15 @@ async fn open_pip_window(app: tauri::AppHandle, options: PipWindowOptions) -> Re
     .map_err(|error| format!("Failed to create PiP window: {error}"))?;
 
     Ok(())
+}
+
+#[tauri::command]
+fn open_support_url(app: tauri::AppHandle) -> Result<(), String> {
+    use tauri_plugin_opener::OpenerExt;
+
+    app.opener()
+        .open_url(SUPPORT_URL, None::<&str>)
+        .map_err(|error| format!("Failed to open support URL: {error}"))
 }
 
 #[tauri::command]
@@ -481,6 +491,7 @@ fn register_global_shortcuts(app: &tauri::AppHandle) -> tauri::Result<()> {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
             #[cfg(desktop)]
@@ -494,6 +505,7 @@ pub fn run() {
             get_update_channel,
             install_update,
             load_store,
+            open_support_url,
             open_pip_window,
             request_pip_snapshot,
             save_store,

@@ -60,6 +60,7 @@ const PIP_CONTROL_PLACEMENTS = ["horizontal", "vertical-left", "vertical-right"]
 const DEFAULT_PIP_CONTROL_PLACEMENT = "horizontal";
 const DEFAULT_SHORTCUT_PREVIOUS = "Ctrl+F5";
 const DEFAULT_SHORTCUT_NEXT = "Ctrl+F6";
+const SUPPORT_URL = "https://ofuse.me/linn0412";
 const PIP_CONTROL_PLACEMENT_CLASSES = ["horizontal", "vertical", "vertical-left", "vertical-right"];
 const PIP_CONTROL_BEHAVIOR_CLASSES = ["full-height-buttons"];
 const EXTENSION_GUIDES = {
@@ -205,6 +206,7 @@ const state = {
   desktopPipOpen: false,
   desktopPipSyncId: 0,
   desktopEventUnlisteners: [],
+  shortcutCaptureTarget: null,
   updateCheckInProgress: false,
   maker: {
     items: [],
@@ -413,6 +415,7 @@ function bindElements() {
     "variant-badge",
     "beta-feedback",
     "support-badge",
+    "support-link",
     "check-update",
     "update-status",
     "open-guide",
@@ -462,6 +465,8 @@ function bindElements() {
     "desktop-shortcut-settings",
     "shortcut-previous",
     "shortcut-next",
+    "capture-shortcut-previous",
+    "capture-shortcut-next",
     "apply-shortcuts",
     "reset-shortcuts",
     "shortcut-status",
@@ -570,9 +575,12 @@ function bindEvents() {
   els.previewPipNext.addEventListener("click", nextCard);
   els.previewStage.addEventListener("click", handlePipControlsHitAreaClick);
   els.openPip.addEventListener("click", openPip);
+  els.supportLink?.addEventListener("click", openSupport);
   els.checkUpdate?.addEventListener("click", () => checkForUpdates({ automatic: false }));
   els.applyShortcuts?.addEventListener("click", () => applyDesktopShortcutSettings());
   els.resetShortcuts?.addEventListener("click", () => resetDesktopShortcuts());
+  els.captureShortcutPrevious?.addEventListener("click", () => startShortcutCapture("previous"));
+  els.captureShortcutNext?.addEventListener("click", () => startShortcutCapture("next"));
   [els.shortcutPrevious, els.shortcutNext].forEach((input) => {
     input?.addEventListener("input", () => {
       setShortcutStatus("未適用のショートカットです。適用を押してください。", "warn");
@@ -770,6 +778,11 @@ function bindEvents() {
   els.deleteGroup.addEventListener("click", deleteGroup);
 
   window.addEventListener("keydown", (event) => {
+    if (state.shortcutCaptureTarget) {
+      handleShortcutCaptureKeydown(event);
+      return;
+    }
+
     if (!els.makerModal.hidden) {
       handleMakerKeydown(event);
       return;
@@ -800,6 +813,22 @@ function bindEvents() {
     revokeAllObjectUrls();
     cleanupDesktopEvents();
   });
+}
+
+async function openSupport(event) {
+  if (!isDesktopApp()) {
+    return;
+  }
+
+  event.preventDefault();
+  try {
+    await invokeDesktop("open_support_url");
+    setStatus("OFUSEの支援ページをブラウザで開きました。");
+  } catch (error) {
+    console.warn("Support URL open failed", error);
+    window.open(SUPPORT_URL, "_blank", "noopener");
+    setStatus("支援ページを開けない場合は、ブラウザで https://ofuse.me/linn0412 を開いてください。", true);
+  }
 }
 
 // Ctrl+Vで受け取った画像をFileとして扱い、通常のファイル追加処理へ流す。
@@ -4263,6 +4292,150 @@ async function applyDesktopShortcutSettings({ quiet = false, save = true } = {})
       setStatus("ショートカットを登録できませんでした。別のキーを試してください。", true);
     }
   }
+}
+
+function startShortcutCapture(target) {
+  if (!isDesktopApp()) {
+    return;
+  }
+
+  state.shortcutCaptureTarget = target;
+  updateShortcutCaptureButtons();
+  const label = target === "previous" ? "前のカンペ" : "次のカンペ";
+  setShortcutStatus(`${label}に割り当てるキーを押してください。Escでキャンセルできます。`, "warn");
+}
+
+async function handleShortcutCaptureKeydown(event) {
+  event.preventDefault();
+  event.stopPropagation();
+
+  if (event.key === "Escape") {
+    cancelShortcutCapture("キー入力をキャンセルしました。");
+    return;
+  }
+
+  const shortcut = shortcutFromKeyboardEvent(event);
+  if (!shortcut) {
+    setShortcutStatus("Ctrl / Alt / Shift などの修飾キー以外も一緒に押してください。", "warn");
+    return;
+  }
+
+  const target = state.shortcutCaptureTarget;
+  if (target === "previous" && els.shortcutPrevious) {
+    els.shortcutPrevious.value = shortcut;
+  } else if (target === "next" && els.shortcutNext) {
+    els.shortcutNext.value = shortcut;
+  }
+
+  state.shortcutCaptureTarget = null;
+  updateShortcutCaptureButtons();
+  await applyDesktopShortcutSettings();
+}
+
+function cancelShortcutCapture(message) {
+  state.shortcutCaptureTarget = null;
+  updateShortcutCaptureButtons();
+  setShortcutStatus(message, "");
+}
+
+function updateShortcutCaptureButtons() {
+  const previousActive = state.shortcutCaptureTarget === "previous";
+  const nextActive = state.shortcutCaptureTarget === "next";
+  if (els.captureShortcutPrevious) {
+    els.captureShortcutPrevious.classList.toggle("capturing", previousActive);
+    els.captureShortcutPrevious.textContent = previousActive ? "入力待ち" : "キー入力";
+    els.captureShortcutPrevious.setAttribute("aria-pressed", String(previousActive));
+  }
+  if (els.captureShortcutNext) {
+    els.captureShortcutNext.classList.toggle("capturing", nextActive);
+    els.captureShortcutNext.textContent = nextActive ? "入力待ち" : "キー入力";
+    els.captureShortcutNext.setAttribute("aria-pressed", String(nextActive));
+  }
+}
+
+function shortcutFromKeyboardEvent(event) {
+  const key = normalizeShortcutEventKey(event);
+  if (!key || isModifierKeyName(key)) {
+    return "";
+  }
+
+  const parts = [];
+  if (event.ctrlKey) {
+    parts.push("Ctrl");
+  }
+  if (event.altKey) {
+    parts.push("Alt");
+  }
+  if (event.shiftKey) {
+    parts.push("Shift");
+  }
+  if (event.metaKey) {
+    parts.push("Super");
+  }
+  parts.push(key);
+  return parts.join("+");
+}
+
+function normalizeShortcutEventKey(event) {
+  const code = event.code || "";
+  if (
+    /^Key[A-Z]$/.test(code) ||
+    /^Digit[0-9]$/.test(code) ||
+    /^Numpad[0-9]$/.test(code) ||
+    /^F(?:[1-9]|1[0-9]|2[0-4])$/.test(code)
+  ) {
+    return code;
+  }
+
+  const codeAliases = {
+    Backquote: "Backquote",
+    Backslash: "Backslash",
+    BracketLeft: "BracketLeft",
+    BracketRight: "BracketRight",
+    Comma: "Comma",
+    Equal: "Equal",
+    Minus: "Minus",
+    Period: "Period",
+    Quote: "Quote",
+    Semicolon: "Semicolon",
+    Slash: "Slash",
+    Backspace: "Backspace",
+    CapsLock: "CapsLock",
+    Enter: "Enter",
+    Space: "Space",
+    Tab: "Tab",
+    Delete: "Delete",
+    End: "End",
+    Home: "Home",
+    Insert: "Insert",
+    PageDown: "PageDown",
+    PageUp: "PageUp",
+    PrintScreen: "PrintScreen",
+    ScrollLock: "ScrollLock",
+    Pause: "Pause",
+    ArrowDown: "ArrowDown",
+    ArrowLeft: "ArrowLeft",
+    ArrowRight: "ArrowRight",
+    ArrowUp: "ArrowUp",
+    NumLock: "NumLock",
+    NumpadAdd: "NumpadAdd",
+    NumpadDecimal: "NumpadDecimal",
+    NumpadDivide: "NumpadDivide",
+    NumpadEnter: "NumpadEnter",
+    NumpadEqual: "NumpadEqual",
+    NumpadMultiply: "NumpadMultiply",
+    NumpadSubtract: "NumpadSubtract",
+    Escape: "Escape",
+  };
+  if (codeAliases[code]) {
+    return codeAliases[code];
+  }
+
+  return normalizeShortcutKey(event.key);
+}
+
+function isModifierKeyName(key) {
+  return ["Control", "Ctrl", "Alt", "Shift", "Meta", "Super"].includes(key);
 }
 
 function resetDesktopShortcuts() {

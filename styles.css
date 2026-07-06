@@ -437,6 +437,26 @@ h2 {
   border-color: rgba(0, 209, 189, 0.65);
 }
 
+.shortcut-input-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.45rem;
+}
+
+.shortcut-capture-button {
+  min-width: 5.4rem;
+  height: 2.35rem;
+  border-color: rgba(0, 209, 189, 0.24);
+  color: var(--accent-strong);
+  background: rgba(0, 209, 189, 0.08);
+}
+
+.shortcut-capture-button.capturing {
+  border-color: rgba(248, 214, 109, 0.75);
+  color: #f8d66d;
+  background: rgba(248, 214, 109, 0.1);
+}
+
 .shortcut-actions {
   display: flex;
   flex-wrap: wrap;
@@ -1733,6 +1753,10 @@ body.pip-body {
   }
 
   .shortcut-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .shortcut-input-row {
     grid-template-columns: 1fr;
   }
 }
