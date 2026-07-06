@@ -11,9 +11,10 @@ PiP Kanpe Tool のデスクトップアプリ版リポジトリです。
 - IndexedDB / localStorage の代わりに、Tauri ではアプリデータ配下の JSON ストアへ保存
 - メイン画面から常に手前表示の Tauri 小窓を開き、現在のカンペ画像を同期
 - Tauri の global-shortcut plugin で `Ctrl+F5` / `Ctrl+F6` による前後切り替えに対応
-- 起動時とボタン操作でアプリ内更新チェックを実行
+- 画面上でデスクトップ版グローバルショートカットを変更可能
+- 起動時とボタン操作でアプリ内更新チェックを実行し、手動操作で更新適用へ進める
 - GitHub Actions で CI と Windows 向け Release asset 作成を実行
-- 初期バージョンは `0.1.0`
+- 初回 stable Release `v0.1.0` を作成済み
 
 ## 開発コマンド
 
@@ -137,5 +138,5 @@ CI は `main` への push、pull request、手動実行で `npm run check`、`np
 
 ## 次にやること
 
-- 初回 GitHub Actions Release 後に、実機で `更新を確認` から更新適用まで通るか検証
+- 次バージョンの Release 後に、旧版インストール済み環境から `更新を確認` → 更新適用 → 再起動まで通るか実機検証
 - JSON ストアの容量が重くなった場合に、画像ファイル分離または SQLite 移行を検討
