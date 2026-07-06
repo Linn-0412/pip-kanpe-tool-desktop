@@ -7,6 +7,7 @@
     "build:web": "node scripts/build-web.mjs",
     "check": "node --check app.js && node --check core.js && node --check pip-window.js && node --check scripts/build-web.mjs && node --check scripts/dev-server.mjs",
     "dev:web": "node scripts/dev-server.mjs",
+    "release:check": "node scripts/validate-release.mjs",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build",

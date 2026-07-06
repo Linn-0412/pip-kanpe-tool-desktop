@@ -206,7 +206,10 @@ fn resize_pip_window(app: tauri::AppHandle, options: PipWindowOptions) -> Result
 }
 
 fn clamp_pip_window_size(options: &PipWindowOptions) -> (f64, f64) {
-    (options.width.clamp(320.0, 1280.0), options.height.clamp(180.0, 720.0))
+    (
+        options.width.clamp(320.0, 1280.0),
+        options.height.clamp(180.0, 720.0),
+    )
 }
 
 #[tauri::command]

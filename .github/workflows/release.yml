@@ -38,6 +38,8 @@ jobs:
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
 
       - name: Cache Rust
         uses: swatinem/rust-cache@v2
@@ -47,11 +49,29 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Validate release metadata
+        run: npm run release:check
+
+      - name: Build web assets
+        run: npm run build:web
+
       - name: Check JavaScript syntax
         run: npm run check
 
       - name: Run tests
         run: npm test
+
+      - name: Check Rust formatting
+        run: cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check
+
+      - name: Check Rust
+        run: cargo check --manifest-path src-tauri/Cargo.toml
+
+      - name: Run Rust tests
+        run: cargo test --manifest-path src-tauri/Cargo.toml
+
+      - name: Lint Rust
+        run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
 
       - name: Publish stable release
         if: ${{ github.event_name != 'workflow_dispatch' || inputs.channel == 'stable' }}
