@@ -107,9 +107,35 @@ GitHub Actions では次の Secrets を使って署名します。
 
 CI は `main` への push、pull request、手動実行で `npm run check`、`npm test`、`cargo check` を実行します。
 
+## Windows コード署名の判断
+
+現時点では、Windows のコード署名証明書はまだ導入しません。
+
+理由:
+
+- Tauri updater の署名は設定済みで、更新ファイルの改ざん検証はできます。
+- Windows コード署名は SmartScreen 警告の軽減に役立ちますが、Microsoft の現在の説明では EV 証明書でも警告を必ず回避できるわけではありません。
+- Microsoft は Store 配布、または Artifact Signing / Trusted Signing を非 Store 配布向けの選択肢として案内しています。
+- まずは GitHub Releases で配布し、利用者数や問い合わせが増えた段階で導入判断するほうが費用対効果が高いです。
+
+導入を検討する目安:
+
+- GitHub Releases からのダウンロード数が増え、SmartScreen で離脱している報告が出る
+- 支援や寄付で月額の運用費をまかなえる
+- Microsoft Store 公開または企業・固定向け配布を考える
+
+候補:
+
+- Microsoft Store: SmartScreen 警告を避けやすいが、ストア公開手続きが必要
+- Azure Artifact Signing / Trusted Signing: CI/CD に組み込みやすいが、本人確認と月額費用が必要
+- OV/EV 証明書: 署名者名を表示できるが、SmartScreen reputation は別途積み上げが必要
+
+参考:
+
+- Tauri Windows Code Signing: https://v2.tauri.app/distribute/sign/windows/
+- Microsoft SmartScreen reputation: https://learn.microsoft.com/en-us/windows/apps/package-and-deploy/smartscreen-reputation
+
 ## 次にやること
 
 - 初回 GitHub Actions Release 後に、実機で `更新を確認` から更新適用まで通るか検証
-- 必要に応じて Windows コード署名証明書の導入を検討
-- ショートカットを画面上で変更できる設定 UI を追加
 - JSON ストアの容量が重くなった場合に、画像ファイル分離または SQLite 移行を検討

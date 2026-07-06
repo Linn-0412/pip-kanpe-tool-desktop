@@ -243,6 +243,39 @@
           </div>
         </details>
 
+        <details id="desktop-shortcut-settings" class="group-settings shortcut-settings" hidden>
+          <summary>デスクトップ版ショートカット</summary>
+          <div class="group-settings-body shortcut-settings-body">
+            <div class="shortcut-grid">
+              <label class="shortcut-field">
+                <span>前のカンペ</span>
+                <input id="shortcut-previous" type="text" value="Ctrl+F5" list="shortcut-presets" spellcheck="false" autocomplete="off">
+              </label>
+              <label class="shortcut-field">
+                <span>次のカンペ</span>
+                <input id="shortcut-next" type="text" value="Ctrl+F6" list="shortcut-presets" spellcheck="false" autocomplete="off">
+              </label>
+            </div>
+            <datalist id="shortcut-presets">
+              <option value="Ctrl+F5"></option>
+              <option value="Ctrl+F6"></option>
+              <option value="Ctrl+F7"></option>
+              <option value="Ctrl+F8"></option>
+              <option value="Alt+F5"></option>
+              <option value="Alt+F6"></option>
+              <option value="Shift+Alt+F5"></option>
+              <option value="Shift+Alt+F6"></option>
+              <option value="Ctrl+Alt+Q"></option>
+              <option value="Ctrl+Alt+E"></option>
+            </datalist>
+            <div class="shortcut-actions">
+              <button id="apply-shortcuts" class="secondary-button" type="button">適用</button>
+              <button id="reset-shortcuts" class="secondary-button" type="button">初期値に戻す</button>
+            </div>
+            <small id="shortcut-status" class="shortcut-status">例: Ctrl+F5 / Shift+Alt+Q / MediaTrackNext</small>
+          </div>
+        </details>
+
         <p id="status-line" class="status-line" role="status"></p>
       </section>
     </main>

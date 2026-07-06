@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::fs;
 use std::path::PathBuf;
+use std::sync::Mutex;
 use tauri::Manager;
 use tauri_plugin_updater::UpdaterExt;
 
@@ -9,6 +10,8 @@ const MAIN_WINDOW_LABEL: &str = "main";
 const PIP_WINDOW_LABEL: &str = "pip";
 const STORE_FILE_NAME: &str = "kanpe-store.json";
 const STORE_VERSION: u32 = 1;
+const DEFAULT_PREVIOUS_SHORTCUT: &str = "Ctrl+F5";
+const DEFAULT_NEXT_SHORTCUT: &str = "Ctrl+F6";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -48,6 +51,21 @@ struct PipNavigatePayload {
     direction: i32,
 }
 
+#[derive(Debug, Clone)]
+struct NavigationShortcutState {
+    previous: String,
+    next: String,
+}
+
+impl Default for NavigationShortcutState {
+    fn default() -> Self {
+        Self {
+            previous: DEFAULT_PREVIOUS_SHORTCUT.to_string(),
+            next: DEFAULT_NEXT_SHORTCUT.to_string(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct UpdateCheckResult {
@@ -67,6 +85,13 @@ struct ShortcutInfo {
     next_registered: bool,
 }
 
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct UpdateInstallResult {
+    installed: bool,
+    version: Option<String>,
+}
+
 #[tauri::command]
 fn get_desktop_info(app: tauri::AppHandle) -> Result<DesktopInfo, String> {
     Ok(DesktopInfo {
@@ -82,13 +107,17 @@ fn get_update_channel() -> String {
 
 #[tauri::command]
 fn get_shortcut_info(app: tauri::AppHandle) -> ShortcutInfo {
-    let (previous_shortcut, next_shortcut) = navigation_shortcuts();
-    ShortcutInfo {
-        previous: "Ctrl+F5".to_string(),
-        next: "Ctrl+F6".to_string(),
-        previous_registered: is_shortcut_registered(&app, previous_shortcut),
-        next_registered: is_shortcut_registered(&app, next_shortcut),
-    }
+    shortcut_info(&app)
+}
+
+#[tauri::command]
+fn set_navigation_shortcuts(
+    app: tauri::AppHandle,
+    previous: String,
+    next: String,
+) -> Result<ShortcutInfo, String> {
+    apply_navigation_shortcuts(&app, previous.trim(), next.trim())?;
+    Ok(shortcut_info(&app))
 }
 
 #[tauri::command]
@@ -221,6 +250,34 @@ async fn check_update(app: tauri::AppHandle) -> Result<UpdateCheckResult, String
     })
 }
 
+#[tauri::command]
+async fn install_update(app: tauri::AppHandle) -> Result<UpdateInstallResult, String> {
+    let update = app
+        .updater()
+        .map_err(|error| format!("Failed to initialize updater: {error}"))?
+        .check()
+        .await
+        .map_err(|error| format!("Failed to check update: {error}"))?;
+
+    let Some(update) = update else {
+        return Ok(UpdateInstallResult {
+            installed: false,
+            version: None,
+        });
+    };
+
+    let version = update.version.clone();
+    update
+        .download_and_install(|_, _| {}, || {})
+        .await
+        .map_err(|error| format!("Failed to install update: {error}"))?;
+
+    Ok(UpdateInstallResult {
+        installed: true,
+        version: Some(version),
+    })
+}
+
 fn store_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     let dir = app
         .path()
@@ -254,16 +311,51 @@ fn dispatch_main_event<T: Serialize>(
 }
 
 #[cfg(desktop)]
-fn navigation_shortcuts() -> (
+fn parse_navigation_shortcuts(
+    previous: &str,
+    next: &str,
+) -> Result<
+    (
+        tauri_plugin_global_shortcut::Shortcut,
+        tauri_plugin_global_shortcut::Shortcut,
+    ),
+    String,
+> {
+    if previous.eq_ignore_ascii_case(next) {
+        return Err("前/次に同じショートカットは設定できません".to_string());
+    }
+
+    let previous_shortcut = previous
+        .parse()
+        .map_err(|error| format!("前のカンペのショートカット形式が正しくありません: {error}"))?;
+    let next_shortcut = next
+        .parse()
+        .map_err(|error| format!("次のカンペのショートカット形式が正しくありません: {error}"))?;
+
+    Ok((previous_shortcut, next_shortcut))
+}
+
+#[cfg(desktop)]
+fn configured_navigation_shortcuts(
+    app: &tauri::AppHandle,
+) -> (
     tauri_plugin_global_shortcut::Shortcut,
     tauri_plugin_global_shortcut::Shortcut,
 ) {
-    use tauri_plugin_global_shortcut::{Code, Modifiers, Shortcut};
+    let state = app.state::<Mutex<NavigationShortcutState>>();
+    let shortcuts = state.lock().unwrap().clone();
 
-    (
-        Shortcut::new(Some(Modifiers::CONTROL), Code::F5),
-        Shortcut::new(Some(Modifiers::CONTROL), Code::F6),
-    )
+    parse_navigation_shortcuts(&shortcuts.previous, &shortcuts.next).unwrap_or_else(|_| {
+        parse_navigation_shortcuts(DEFAULT_PREVIOUS_SHORTCUT, DEFAULT_NEXT_SHORTCUT)
+            .expect("default shortcuts must be valid")
+    })
+}
+
+#[cfg(desktop)]
+fn configured_navigation_shortcut_labels(app: &tauri::AppHandle) -> (String, String) {
+    let state = app.state::<Mutex<NavigationShortcutState>>();
+    let shortcuts = state.lock().unwrap();
+    (shortcuts.previous.clone(), shortcuts.next.clone())
 }
 
 #[cfg(desktop)]
@@ -276,19 +368,86 @@ fn is_shortcut_registered(
     app.global_shortcut().is_registered(shortcut)
 }
 
+#[cfg(desktop)]
+fn shortcut_info(app: &tauri::AppHandle) -> ShortcutInfo {
+    let (previous, next) = configured_navigation_shortcut_labels(app);
+    let (previous_shortcut, next_shortcut) = configured_navigation_shortcuts(app);
+
+    ShortcutInfo {
+        previous,
+        next,
+        previous_registered: is_shortcut_registered(app, previous_shortcut),
+        next_registered: is_shortcut_registered(app, next_shortcut),
+    }
+}
+
+#[cfg(desktop)]
+fn apply_navigation_shortcuts(
+    app: &tauri::AppHandle,
+    previous: &str,
+    next: &str,
+) -> Result<(), String> {
+    use tauri_plugin_global_shortcut::GlobalShortcutExt;
+
+    let (previous_shortcut, next_shortcut) = parse_navigation_shortcuts(previous, next)?;
+    let (current_previous, current_next) = configured_navigation_shortcuts(app);
+
+    let _ = app.global_shortcut().unregister(current_previous);
+    let _ = app.global_shortcut().unregister(current_next);
+
+    if let Err(error) = app.global_shortcut().register(previous_shortcut) {
+        let _ = app.global_shortcut().register(current_previous);
+        let _ = app.global_shortcut().register(current_next);
+        return Err(format!(
+            "前のカンペのショートカットを登録できませんでした: {error}"
+        ));
+    }
+
+    if let Err(error) = app.global_shortcut().register(next_shortcut) {
+        let _ = app.global_shortcut().unregister(previous_shortcut);
+        let _ = app.global_shortcut().register(current_previous);
+        let _ = app.global_shortcut().register(current_next);
+        return Err(format!(
+            "次のカンペのショートカットを登録できませんでした: {error}"
+        ));
+    }
+
+    let state = app.state::<Mutex<NavigationShortcutState>>();
+    let mut shortcuts = state.lock().unwrap();
+    shortcuts.previous = previous.to_string();
+    shortcuts.next = next.to_string();
+    Ok(())
+}
+
 #[cfg(not(desktop))]
 fn is_shortcut_registered(_app: &tauri::AppHandle, _shortcut: ()) -> bool {
     false
 }
 
+#[cfg(not(desktop))]
+fn shortcut_info(_app: &tauri::AppHandle) -> ShortcutInfo {
+    ShortcutInfo {
+        previous: DEFAULT_PREVIOUS_SHORTCUT.to_string(),
+        next: DEFAULT_NEXT_SHORTCUT.to_string(),
+        previous_registered: false,
+        next_registered: false,
+    }
+}
+
+#[cfg(not(desktop))]
+fn apply_navigation_shortcuts(
+    _app: &tauri::AppHandle,
+    _previous: &str,
+    _next: &str,
+) -> Result<(), String> {
+    Ok(())
+}
+
 #[cfg(desktop)]
 fn register_global_shortcuts(app: &tauri::AppHandle) -> tauri::Result<()> {
-    use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
+    use tauri_plugin_global_shortcut::ShortcutState;
 
-    let (previous_shortcut, next_shortcut) = navigation_shortcuts();
-    let handler_previous = previous_shortcut;
-    let handler_next = next_shortcut;
-
+    app.manage(Mutex::new(NavigationShortcutState::default()));
     app.plugin(
         tauri_plugin_global_shortcut::Builder::new()
             .with_handler(move |app, shortcut, event| {
@@ -296,9 +455,10 @@ fn register_global_shortcuts(app: &tauri::AppHandle) -> tauri::Result<()> {
                     return;
                 }
 
-                let direction = if shortcut == &handler_previous {
+                let (previous_shortcut, next_shortcut) = configured_navigation_shortcuts(app);
+                let direction = if shortcut == &previous_shortcut {
                     -1
-                } else if shortcut == &handler_next {
+                } else if shortcut == &next_shortcut {
                     1
                 } else {
                     return;
@@ -309,11 +469,10 @@ fn register_global_shortcuts(app: &tauri::AppHandle) -> tauri::Result<()> {
             .build(),
     )?;
 
-    if let Err(error) = app.global_shortcut().register(previous_shortcut) {
-        eprintln!("Failed to register Ctrl+F5 shortcut: {error}");
-    }
-    if let Err(error) = app.global_shortcut().register(next_shortcut) {
-        eprintln!("Failed to register Ctrl+F6 shortcut: {error}");
+    if let Err(error) =
+        apply_navigation_shortcuts(app, DEFAULT_PREVIOUS_SHORTCUT, DEFAULT_NEXT_SHORTCUT)
+    {
+        eprintln!("Failed to register default navigation shortcuts: {error}");
     }
 
     Ok(())
@@ -333,10 +492,12 @@ pub fn run() {
             get_desktop_info,
             get_shortcut_info,
             get_update_channel,
+            install_update,
             load_store,
             open_pip_window,
             request_pip_snapshot,
             save_store,
+            set_navigation_shortcuts,
             step_pip_card,
             update_pip_window
         ])

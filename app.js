@@ -58,6 +58,8 @@ const DECK_EXPORT_SETTING_KEYS = [
 ];
 const PIP_CONTROL_PLACEMENTS = ["horizontal", "vertical-left", "vertical-right"];
 const DEFAULT_PIP_CONTROL_PLACEMENT = "horizontal";
+const DEFAULT_SHORTCUT_PREVIOUS = "Ctrl+F5";
+const DEFAULT_SHORTCUT_NEXT = "Ctrl+F6";
 const PIP_CONTROL_PLACEMENT_CLASSES = ["horizontal", "vertical", "vertical-left", "vertical-right"];
 const PIP_CONTROL_BEHAVIOR_CLASSES = ["full-height-buttons"];
 const EXTENSION_GUIDES = {
@@ -226,6 +228,8 @@ const state = {
     showPipLabel: true,
     showFileExtension: false,
     optimizeImages: true,
+    shortcutPrevious: DEFAULT_SHORTCUT_PREVIOUS,
+    shortcutNext: DEFAULT_SHORTCUT_NEXT,
     hideGuideOnLaunch: false,
     activeGroupId: ALL_GROUP_ID,
     groups: [],
@@ -258,6 +262,9 @@ async function init() {
       loadSettings();
     }
     applySettingsToControls();
+    if (isDesktopApp()) {
+      await applyDesktopShortcutSettings({ quiet: true, save: false });
+    }
   } catch (error) {
     console.error(error);
     setStatus("設定を読み込めませんでした。初期設定で起動します。", true);
@@ -300,6 +307,7 @@ async function hydrateDesktopInfo() {
     console.info("PiP Kanpe Tool Desktop", info);
     const shortcuts = await invokeDesktop("get_shortcut_info");
     console.info("PiP Kanpe Tool shortcuts", shortcuts);
+    syncShortcutControls(shortcuts);
   } catch (error) {
     console.warn("Desktop info unavailable", error);
   }
@@ -312,6 +320,9 @@ function prepareDesktopUi() {
   }
   if (els.updateStatus) {
     els.updateStatus.hidden = !desktop;
+  }
+  if (els.desktopShortcutSettings) {
+    els.desktopShortcutSettings.hidden = !desktop;
   }
 }
 
@@ -365,6 +376,10 @@ async function checkForUpdates({ automatic = false } = {}) {
     if (result.available) {
       const version = result.version ? `v${result.version}` : "新しいバージョン";
       setUpdateStatus(`${version} があります`, "ok");
+      if (!automatic && window.confirm(`${version} に更新します。更新中にアプリが閉じます。続行しますか？`)) {
+        setUpdateStatus("更新をダウンロードしています...", "");
+        await invokeDesktop("install_update");
+      }
     } else {
       setUpdateStatus(`最新です（v${result.currentVersion}）`, "ok");
     }
@@ -444,6 +459,12 @@ function bindElements() {
     "pip-controls-auto-hide",
     "show-pip-label",
     "show-file-extension",
+    "desktop-shortcut-settings",
+    "shortcut-previous",
+    "shortcut-next",
+    "apply-shortcuts",
+    "reset-shortcuts",
+    "shortcut-status",
     "status-line",
     "guide-modal",
     "close-guide",
@@ -550,6 +571,21 @@ function bindEvents() {
   els.previewStage.addEventListener("click", handlePipControlsHitAreaClick);
   els.openPip.addEventListener("click", openPip);
   els.checkUpdate?.addEventListener("click", () => checkForUpdates({ automatic: false }));
+  els.applyShortcuts?.addEventListener("click", () => applyDesktopShortcutSettings());
+  els.resetShortcuts?.addEventListener("click", () => resetDesktopShortcuts());
+  [els.shortcutPrevious, els.shortcutNext].forEach((input) => {
+    input?.addEventListener("input", () => {
+      setShortcutStatus("未適用のショートカットです。適用を押してください。", "warn");
+    });
+    input?.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter") {
+        return;
+      }
+
+      event.preventDefault();
+      applyDesktopShortcutSettings();
+    });
+  });
   els.openGuide.addEventListener("click", showGuideModal);
   els.openMaker.addEventListener("click", showMakerModal);
   els.clearAll.addEventListener("click", clearAllCards);
@@ -4174,6 +4210,13 @@ function applySettingsToControls() {
   els.showFileExtension.checked = state.settings.showFileExtension;
   syncPipLabelOptions();
   els.optimizeImages.checked = state.settings.optimizeImages;
+  if (els.shortcutPrevious) {
+    els.shortcutPrevious.value = state.settings.shortcutPrevious || DEFAULT_SHORTCUT_PREVIOUS;
+  }
+  if (els.shortcutNext) {
+    els.shortcutNext.value = state.settings.shortcutNext || DEFAULT_SHORTCUT_NEXT;
+  }
+  setShortcutStatus("デスクトップ版ではこの設定でグローバルショートカットを登録します。", "");
   els.hideGuideNextTime.checked = state.settings.hideGuideOnLaunch;
 
   const guideForced = new URLSearchParams(window.location.search).get("guide") === "1";
@@ -4184,6 +4227,165 @@ function applySettingsToControls() {
 
 function syncPipLabelOptions() {
   els.showFileExtension.disabled = !shouldShowPipLabel();
+}
+
+async function applyDesktopShortcutSettings({ quiet = false, save = true } = {}) {
+  if (!isDesktopApp()) {
+    return;
+  }
+
+  const previous = normalizeShortcutValue(els.shortcutPrevious?.value || state.settings.shortcutPrevious);
+  const next = normalizeShortcutValue(els.shortcutNext?.value || state.settings.shortcutNext);
+  if (!previous || !next) {
+    setShortcutStatus("前/次のショートカットを両方入力してください。", "error");
+    return;
+  }
+  if (previous.toLowerCase() === next.toLowerCase()) {
+    setShortcutStatus("前/次に同じショートカットは設定できません。", "error");
+    return;
+  }
+
+  try {
+    const result = await invokeDesktop("set_navigation_shortcuts", { previous, next });
+    state.settings.shortcutPrevious = result.previous;
+    state.settings.shortcutNext = result.next;
+    syncShortcutControls(result);
+    if (save) {
+      saveSettings();
+    }
+    if (!quiet) {
+      setStatus(`ショートカットを更新しました。前: ${result.previous} / 次: ${result.next}`);
+    }
+  } catch (error) {
+    console.warn("Shortcut registration failed", error);
+    setShortcutStatus(String(error), "error");
+    if (!quiet) {
+      setStatus("ショートカットを登録できませんでした。別のキーを試してください。", true);
+    }
+  }
+}
+
+function resetDesktopShortcuts() {
+  if (els.shortcutPrevious) {
+    els.shortcutPrevious.value = DEFAULT_SHORTCUT_PREVIOUS;
+  }
+  if (els.shortcutNext) {
+    els.shortcutNext.value = DEFAULT_SHORTCUT_NEXT;
+  }
+  applyDesktopShortcutSettings();
+}
+
+function syncShortcutControls(shortcuts) {
+  if (!shortcuts || typeof shortcuts !== "object") {
+    return;
+  }
+
+  if (els.shortcutPrevious) {
+    els.shortcutPrevious.value = shortcuts.previous || DEFAULT_SHORTCUT_PREVIOUS;
+  }
+  if (els.shortcutNext) {
+    els.shortcutNext.value = shortcuts.next || DEFAULT_SHORTCUT_NEXT;
+  }
+
+  const registered = shortcuts.previousRegistered && shortcuts.nextRegistered;
+  const tone = registered ? "ok" : "warn";
+  const message = registered
+    ? `登録中: 前 ${shortcuts.previous} / 次 ${shortcuts.next}`
+    : `一部のショートカットを登録できていません。前 ${shortcuts.previous} / 次 ${shortcuts.next}`;
+  setShortcutStatus(message, tone);
+}
+
+function normalizeShortcutValue(value) {
+  const parts = String(value || "")
+    .split("+")
+    .map((part) => part.trim())
+    .filter(Boolean);
+  if (parts.length === 0) {
+    return "";
+  }
+
+  const modifierOrder = ["Ctrl", "Alt", "Shift", "Super"];
+  const modifiers = [];
+  const keys = [];
+  parts.forEach((part) => {
+    const modifier = normalizeShortcutModifier(part);
+    if (modifier) {
+      if (!modifiers.includes(modifier)) {
+        modifiers.push(modifier);
+      }
+      return;
+    }
+    keys.push(normalizeShortcutKey(part));
+  });
+
+  if (keys.length !== 1) {
+    return parts.join("+");
+  }
+
+  modifiers.sort((a, b) => modifierOrder.indexOf(a) - modifierOrder.indexOf(b));
+  return [...modifiers, keys[0]].join("+");
+}
+
+function normalizeShortcutModifier(value) {
+  const normalized = String(value).trim().toLowerCase();
+  if (normalized === "ctrl" || normalized === "control" || normalized === "cmdorctrl" || normalized === "commandorcontrol") {
+    return "Ctrl";
+  }
+  if (normalized === "alt" || normalized === "option") {
+    return "Alt";
+  }
+  if (normalized === "shift") {
+    return "Shift";
+  }
+  if (normalized === "super" || normalized === "cmd" || normalized === "command" || normalized === "win" || normalized === "meta") {
+    return "Super";
+  }
+  return "";
+}
+
+function normalizeShortcutKey(value) {
+  const trimmed = String(value).trim();
+  const upper = trimmed.toUpperCase();
+  if (/^F(?:[1-9]|1[0-9]|2[0-4])$/.test(upper)) {
+    return upper;
+  }
+  if (/^[A-Z]$/.test(upper) || /^[0-9]$/.test(trimmed)) {
+    return upper;
+  }
+
+  const aliases = {
+    esc: "Escape",
+    escape: "Escape",
+    space: "Space",
+    tab: "Tab",
+    enter: "Enter",
+    return: "Enter",
+    delete: "Delete",
+    del: "Delete",
+    backspace: "Backspace",
+    left: "ArrowLeft",
+    right: "ArrowRight",
+    up: "ArrowUp",
+    down: "ArrowDown",
+    pageup: "PageUp",
+    pagedown: "PageDown",
+    home: "Home",
+    end: "End",
+    insert: "Insert",
+  };
+  return aliases[trimmed.toLowerCase()] || trimmed;
+}
+
+function setShortcutStatus(message, tone = "") {
+  if (!els.shortcutStatus) {
+    return;
+  }
+
+  els.shortcutStatus.textContent = message;
+  els.shortcutStatus.classList.remove("ok", "warn", "error");
+  if (tone) {
+    els.shortcutStatus.classList.add(tone);
+  }
 }
 
 function setStatus(message, isError = false) {

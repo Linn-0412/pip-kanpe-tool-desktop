@@ -399,6 +399,68 @@ h2 {
   padding: 0.75rem;
 }
 
+.shortcut-settings {
+  margin-top: 0.9rem;
+}
+
+.shortcut-settings-body {
+  gap: 0.8rem;
+}
+
+.shortcut-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.shortcut-field {
+  display: grid;
+  gap: 0.35rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.shortcut-field input {
+  width: 100%;
+  min-height: 2.35rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0 0.7rem;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.04);
+  font: inherit;
+}
+
+.shortcut-field input:focus {
+  outline: 2px solid rgba(0, 209, 189, 0.35);
+  outline-offset: 2px;
+  border-color: rgba(0, 209, 189, 0.65);
+}
+
+.shortcut-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.shortcut-status {
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+
+.shortcut-status.ok {
+  color: var(--accent-strong);
+}
+
+.shortcut-status.warn {
+  color: #f8d66d;
+}
+
+.shortcut-status.error {
+  color: var(--danger);
+}
+
 /* Registered image list */
 .list-header {
   justify-content: space-between;
@@ -1668,5 +1730,9 @@ body.pip-body {
 
   .guide-actions .primary-button {
     width: 100%;
+  }
+
+  .shortcut-grid {
+    grid-template-columns: 1fr;
   }
 }
