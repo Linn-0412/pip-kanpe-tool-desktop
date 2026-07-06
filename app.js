@@ -357,7 +357,7 @@ async function checkForUpdates({ automatic = false } = {}) {
   } catch (error) {
     console.warn("Update check failed", error);
     if (automatic) {
-      setUpdateStatus("更新確認はlatest.json公開後に有効です", "warn");
+      setUpdateStatus("更新情報を取得できませんでした", "warn");
     } else {
       setUpdateStatus("更新情報を取得できませんでした", "error");
     }

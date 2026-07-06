@@ -1,6 +1,6 @@
 [package]
 name = "pip-kanpe-tool-desktop"
-version = "0.1.2"
+version = "0.1.3"
 description = "Desktop edition of PiP Kanpe Tool"
 authors = ["Linn-0412"]
 edition = "2021"
