@@ -692,12 +692,12 @@ function bindEvents() {
     updatePip();
   });
 
-  els.pipHideTitleBar.addEventListener("change", () => {
+  els.pipHideTitleBar.addEventListener("change", async () => {
     state.settings.pipHideTitleBar = els.pipHideTitleBar.checked;
     saveSettings();
-    applyDesktopPipDecorations();
+    await applyDesktopPipDecorations();
     // 小窓DOM側のドラッグ領域（data-tauri-drag-region）を反映するため再描画する。
-    updatePip();
+    await updatePip();
   });
 
   els.showPipLabel.addEventListener("change", () => {
@@ -3646,8 +3646,8 @@ function getPipCss() {
 // 現在のカード、表示設定、ボタン状態をPiP小窓へ反映する。
 function updatePip() {
   if (isDesktopApp()) {
-    syncDesktopPipWindow();
-    return;
+    // 呼び出し側が await できるよう、同期処理の Promise を返す。
+    return syncDesktopPipWindow();
   }
 
   const pip = state.pipWindow;

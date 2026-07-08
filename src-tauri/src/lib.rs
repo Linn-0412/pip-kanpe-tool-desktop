@@ -168,9 +168,11 @@ async fn open_pip_window(app: tauri::AppHandle, options: PipWindowOptions) -> Re
         window
             .set_always_on_top(true)
             .map_err(|error| format!("Failed to keep PiP window on top: {error}"))?;
-        window
-            .set_decorations(!options.hide_title_bar)
-            .map_err(|error| format!("Failed to update PiP decorations: {error}"))?;
+        // 装飾の切り替えは OS/WM によっては未対応・失敗しうるため、
+        // 失敗してもウィンドウの表示・リサイズは継続できるよう致命的にはしない。
+        if let Err(error) = window.set_decorations(!options.hide_title_bar) {
+            eprintln!("Failed to update PiP decorations: {error}");
+        }
         window
             .set_size(tauri::Size::Logical(tauri::LogicalSize::new(width, height)))
             .map_err(|error| format!("Failed to resize PiP window: {error}"))?;
