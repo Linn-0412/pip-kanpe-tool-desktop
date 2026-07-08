@@ -28,7 +28,7 @@ async function init() {
 }
 
 function bindElements() {
-  ["pip-shell", "pip-image", "pip-empty", "pip-controls", "pip-prev", "pip-label", "pip-next"].forEach((id) => {
+  ["pip-shell", "pip-image", "pip-empty", "pip-controls", "pip-prev", "pip-label", "pip-next", "pip-close"].forEach((id) => {
     els[toCamel(id)] = document.getElementById(id);
   });
 }
@@ -37,6 +37,17 @@ function bindEvents() {
   els.pipPrev.addEventListener("click", () => stepCard(-1));
   els.pipNext.addEventListener("click", () => stepCard(1));
   els.pipShell.addEventListener("click", handlePipHitAreaClick);
+  els.pipClose.addEventListener("click", (event) => {
+    // シェルのクリック判定（矢印の当たり判定）に伝播させない。
+    event.stopPropagation();
+    closePipWindow();
+  });
+}
+
+async function closePipWindow() {
+  await invokeDesktop("close_pip_window").catch((error) => {
+    console.warn("PiP close failed", error);
+  });
 }
 
 async function stepCard(direction) {
@@ -54,6 +65,7 @@ function renderPip(payload) {
   currentPayload = payload;
   document.title = payload.title || "PiP カンペ";
   applyControlClasses(payload.controls);
+  applyTitleBarState(Boolean(payload.controls?.hideTitleBar));
 
   const hasCard = Boolean(payload.hasCard && payload.imageSrc);
   els.pipImage.style.display = hasCard ? "block" : "none";
@@ -110,6 +122,19 @@ function applyControlClasses(controls = {}) {
   els.pipControls.classList.toggle("full-height-buttons", Boolean(controls.fullHeightButtons));
   els.pipControls.classList.toggle("separate", Boolean(controls.separate));
   els.pipControls.classList.toggle("label-hidden", Boolean(controls.labelHidden));
+}
+
+// タイトルバーを消すと OS 側のドラッグ領域が無くなるため、
+// 画像・空表示部分を data-tauri-drag-region にして小窓を動かせるようにする。
+function applyTitleBarState(hidden) {
+  els.pipShell.classList.toggle("title-bar-hidden", hidden);
+  [els.pipImage, els.pipEmpty].forEach((el) => {
+    if (hidden) {
+      el.setAttribute("data-tauri-drag-region", "");
+    } else {
+      el.removeAttribute("data-tauri-drag-region");
+    }
+  });
 }
 
 function updateButtonLabels(vertical) {

@@ -44,6 +44,8 @@ struct DesktopInfo {
 struct PipWindowOptions {
     width: f64,
     height: f64,
+    #[serde(default)]
+    hide_title_bar: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -167,6 +169,9 @@ async fn open_pip_window(app: tauri::AppHandle, options: PipWindowOptions) -> Re
             .set_always_on_top(true)
             .map_err(|error| format!("Failed to keep PiP window on top: {error}"))?;
         window
+            .set_decorations(!options.hide_title_bar)
+            .map_err(|error| format!("Failed to update PiP decorations: {error}"))?;
+        window
             .set_size(tauri::Size::Logical(tauri::LogicalSize::new(width, height)))
             .map_err(|error| format!("Failed to resize PiP window: {error}"))?;
         window
@@ -184,12 +189,39 @@ async fn open_pip_window(app: tauri::AppHandle, options: PipWindowOptions) -> Re
     .inner_size(width, height)
     .min_inner_size(320.0, 180.0)
     .resizable(true)
-    .decorations(true)
+    .decorations(!options.hide_title_bar)
     .always_on_top(true)
     .build()
     .map_err(|error| format!("Failed to create PiP window: {error}"))?;
 
     Ok(())
+}
+
+#[tauri::command]
+fn set_pip_window_decorations(
+    app: tauri::AppHandle,
+    hide_title_bar: bool,
+) -> Result<bool, String> {
+    let Some(window) = app.get_webview_window(PIP_WINDOW_LABEL) else {
+        return Ok(false);
+    };
+
+    window
+        .set_decorations(!hide_title_bar)
+        .map_err(|error| format!("Failed to update PiP decorations: {error}"))?;
+    Ok(true)
+}
+
+#[tauri::command]
+fn close_pip_window(app: tauri::AppHandle) -> Result<bool, String> {
+    let Some(window) = app.get_webview_window(PIP_WINDOW_LABEL) else {
+        return Ok(false);
+    };
+
+    window
+        .close()
+        .map_err(|error| format!("Failed to close PiP window: {error}"))?;
+    Ok(true)
 }
 
 #[tauri::command]
@@ -519,6 +551,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             check_update,
+            close_pip_window,
             get_desktop_info,
             get_shortcut_info,
             get_update_channel,
@@ -529,6 +562,7 @@ pub fn run() {
             request_pip_snapshot,
             resize_pip_window,
             save_store,
+            set_pip_window_decorations,
             set_navigation_shortcuts,
             step_pip_card,
             update_pip_window
