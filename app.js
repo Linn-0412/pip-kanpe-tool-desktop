@@ -61,6 +61,8 @@ const DECK_EXPORT_SETTING_KEYS = [
 ];
 const PIP_CONTROL_PLACEMENTS = ["horizontal", "vertical-left", "vertical-right"];
 const DEFAULT_PIP_CONTROL_PLACEMENT = "horizontal";
+// PiP小窓サイズの許容範囲。Rust側 clamp_pip_window_size と一致させること。
+const PIP_SIZE_LIMITS = { minWidth: 320, maxWidth: 1280, minHeight: 180, maxHeight: 720 };
 const DEFAULT_SHORTCUT_PREVIOUS = "Ctrl+F5";
 const DEFAULT_SHORTCUT_NEXT = "Ctrl+F6";
 const SUPPORT_URL = "https://ofuse.me/linn0412";
@@ -3699,10 +3701,12 @@ function updatePip() {
   next.disabled = !multipleVisible;
 }
 
-// PiP小窓サイズの許容範囲。Rust側 clamp_pip_window_size と一致させること。
-const PIP_SIZE_LIMITS = { minWidth: 320, maxWidth: 1280, minHeight: 180, maxHeight: 720 };
-
 function clampPipDimension(value, min, max, fallback) {
+  // 空欄・null・undefined は 0 とみなされて最小値へ丸められてしまうため、
+  // 数値化する前に弾いて fallback（前回値）を返す。
+  if (value === null || value === undefined || String(value).trim() === "") {
+    return fallback;
+  }
   const rounded = Math.round(Number(value));
   if (!Number.isFinite(rounded)) {
     return fallback;
