@@ -56,6 +56,7 @@ const DECK_EXPORT_SETTING_KEYS = [
   "pipControlsBackground",
   "pipControlsSeparateFromImage",
   "pipControlsAutoHide",
+  "pipHideTitleBar",
   "showPipLabel",
   "showFileExtension",
 ];
@@ -205,6 +206,7 @@ const state = {
     pipControlsBackground: DEFAULT_PIP_CONTROL_BACKGROUND,
     pipControlsSeparateFromImage: true,
     pipControlsAutoHide: true,
+    pipHideTitleBar: false,
     showPipLabel: true,
     showFileExtension: false,
     optimizeImages: true,
@@ -440,6 +442,7 @@ function bindElements() {
     "pip-controls-background-clear",
     "pip-controls-separate",
     "pip-controls-auto-hide",
+    "pip-hide-title-bar",
     "show-pip-label",
     "show-file-extension",
     "desktop-shortcut-settings",
@@ -710,6 +713,14 @@ function bindEvents() {
     saveSettings();
     updatePreview();
     updatePip();
+  });
+
+  els.pipHideTitleBar.addEventListener("change", async () => {
+    state.settings.pipHideTitleBar = els.pipHideTitleBar.checked;
+    saveSettings();
+    await applyDesktopPipDecorations();
+    // 小窓DOM側のドラッグ領域（data-tauri-drag-region）を反映するため再描画する。
+    await updatePip();
   });
 
   els.showPipLabel.addEventListener("change", () => {
@@ -3542,7 +3553,9 @@ async function openDesktopPip() {
 
   try {
     const { width, height } = getPipWindowSize();
-    await invokeDesktop("open_pip_window", { options: { width, height } });
+    await invokeDesktop("open_pip_window", {
+      options: { width, height, hideTitleBar: state.settings.pipHideTitleBar === true },
+    });
     state.desktopPipOpen = true;
     await syncDesktopPipWindow();
     setStatus("Tauri版PiP小窓を開きました。Ctrl+F5で前、Ctrl+F6で次へ切り替えできます。");
@@ -3564,6 +3577,24 @@ async function resizeDesktopPipWindow() {
     }
   } catch (error) {
     console.warn("Desktop PiP resize failed", error);
+  }
+}
+
+// タイトルバー（ウィンドウ装飾）の表示切り替えを、開いている小窓へ即時反映する。
+async function applyDesktopPipDecorations() {
+  if (!isDesktopApp() || !state.desktopPipOpen) {
+    return;
+  }
+
+  try {
+    const applied = await invokeDesktop("set_pip_window_decorations", {
+      hideTitleBar: state.settings.pipHideTitleBar === true,
+    });
+    if (!applied) {
+      state.desktopPipOpen = false;
+    }
+  } catch (error) {
+    console.warn("Desktop PiP decorations update failed", error);
   }
 }
 
@@ -3649,8 +3680,8 @@ function getPipCss() {
 // 現在のカード、表示設定、ボタン状態をPiP小窓へ反映する。
 function updatePip() {
   if (isDesktopApp()) {
-    syncDesktopPipWindow();
-    return;
+    // 呼び出し側が await できるよう、同期処理の Promise を返す。
+    return syncDesktopPipWindow();
   }
 
   const pip = state.pipWindow;
@@ -3800,6 +3831,7 @@ async function createDesktopPipPayload() {
     separate: state.settings.pipControlsSeparateFromImage,
     autoHide: state.settings.pipControlsAutoHide,
     labelHidden: !shouldShowPipLabel(),
+    hideTitleBar: state.settings.pipHideTitleBar === true,
   };
 
   if (!card) {
@@ -4214,6 +4246,7 @@ function applySettingsToControls() {
   els.pipControlsBackgroundClear.checked = pipControlsBackground === "background-clear";
   els.pipControlsSeparate.checked = state.settings.pipControlsSeparateFromImage;
   els.pipControlsAutoHide.checked = state.settings.pipControlsAutoHide;
+  els.pipHideTitleBar.checked = state.settings.pipHideTitleBar === true;
   els.showPipLabel.checked = shouldShowPipLabel();
   els.showFileExtension.checked = state.settings.showFileExtension;
   syncPipLabelOptions();
