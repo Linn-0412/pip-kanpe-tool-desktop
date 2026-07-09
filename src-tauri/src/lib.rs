@@ -200,10 +200,7 @@ async fn open_pip_window(app: tauri::AppHandle, options: PipWindowOptions) -> Re
 }
 
 #[tauri::command]
-fn set_pip_window_decorations(
-    app: tauri::AppHandle,
-    hide_title_bar: bool,
-) -> Result<bool, String> {
+fn set_pip_window_decorations(app: tauri::AppHandle, hide_title_bar: bool) -> Result<bool, String> {
     let Some(window) = app.get_webview_window(PIP_WINDOW_LABEL) else {
         return Ok(false);
     };
