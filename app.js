@@ -46,6 +46,9 @@ const DESKTOP_STORE_VERSION = 1;
 const DECK_EXPORT_SETTING_KEYS = [
   "fitMode",
   "pipSize",
+  "pipSizeMode",
+  "pipCustomWidth",
+  "pipCustomHeight",
   "pipControlsSize",
   "pipControlsPlacement",
   "pipControlsFullHeightButtons",
@@ -58,6 +61,8 @@ const DECK_EXPORT_SETTING_KEYS = [
 ];
 const PIP_CONTROL_PLACEMENTS = ["horizontal", "vertical-left", "vertical-right"];
 const DEFAULT_PIP_CONTROL_PLACEMENT = "horizontal";
+// PiP小窓サイズの許容範囲。Rust側 clamp_pip_window_size と一致させること。
+const PIP_SIZE_LIMITS = { minWidth: 320, maxWidth: 1280, minHeight: 180, maxHeight: 720 };
 const DEFAULT_SHORTCUT_PREVIOUS = "Ctrl+F5";
 const DEFAULT_SHORTCUT_NEXT = "Ctrl+F6";
 const SUPPORT_URL = "https://ofuse.me/linn0412";
@@ -190,6 +195,9 @@ const state = {
   settings: {
     fitMode: "contain",
     pipSize: "640x360",
+    pipSizeMode: "preset",
+    pipCustomWidth: 640,
+    pipCustomHeight: 360,
     pipControlsSize: DEFAULT_PIP_CONTROL_SIZE,
     pipControlsPlacement: DEFAULT_PIP_CONTROL_PLACEMENT,
     pipControlsFullHeightButtons: false,
@@ -414,6 +422,9 @@ function bindElements() {
     "preview-pip-next",
     "fit-mode",
     "pip-size",
+    "pip-size-custom",
+    "pip-size-custom-width",
+    "pip-size-custom-height",
     "pip-controls-size-small",
     "pip-controls-size-medium",
     "pip-controls-size-large",
@@ -604,10 +615,22 @@ function bindEvents() {
   });
 
   els.pipSize.addEventListener("change", () => {
-    state.settings.pipSize = els.pipSize.value;
+    if (els.pipSize.value === "custom") {
+      state.settings.pipSizeMode = "custom";
+    } else {
+      state.settings.pipSizeMode = "preset";
+      state.settings.pipSize = els.pipSize.value;
+    }
+    syncPipSizeCustomVisibility();
     saveSettings();
     resizeDesktopPipWindow();
     updatePip();
+  });
+
+  [els.pipSizeCustomWidth, els.pipSizeCustomHeight].forEach((input) => {
+    input.addEventListener("change", () => {
+      applyPipCustomSizeFromInputs();
+    });
   });
 
   [els.pipControlsSizeSmall, els.pipControlsSizeMedium, els.pipControlsSizeLarge].forEach((radio) => {
@@ -2948,6 +2971,17 @@ function isValidDeckSetting(key, value) {
   if (key === "pipSize") {
     return ["480x270", "640x360", "800x450", "960x540"].includes(value);
   }
+  if (key === "pipSizeMode") {
+    return value === "preset" || value === "custom";
+  }
+  if (key === "pipCustomWidth") {
+    const width = Number(value);
+    return Number.isFinite(width) && width >= PIP_SIZE_LIMITS.minWidth && width <= PIP_SIZE_LIMITS.maxWidth;
+  }
+  if (key === "pipCustomHeight") {
+    const height = Number(value);
+    return Number.isFinite(height) && height >= PIP_SIZE_LIMITS.minHeight && height <= PIP_SIZE_LIMITS.maxHeight;
+  }
   if (key === "pipControlsSize") {
     return ["small", "medium", "large"].includes(value);
   }
@@ -3475,7 +3509,7 @@ async function openPip() {
   }
 
   try {
-    const [width, height] = state.settings.pipSize.split("x").map(Number);
+    const { width, height } = getPipWindowSize();
     state.pipWindow = await window.documentPictureInPicture.requestWindow({
       width,
       height,
@@ -3667,9 +3701,68 @@ function updatePip() {
   next.disabled = !multipleVisible;
 }
 
+function clampPipDimension(value, min, max, fallback) {
+  // 空欄・null・undefined は 0 とみなされて最小値へ丸められてしまうため、
+  // 数値化する前に弾いて fallback（前回値）を返す。
+  if (value === null || value === undefined || String(value).trim() === "") {
+    return fallback;
+  }
+  const rounded = Math.round(Number(value));
+  if (!Number.isFinite(rounded)) {
+    return fallback;
+  }
+  return Math.min(max, Math.max(min, rounded));
+}
+
 function getPipWindowSize() {
+  if (state.settings.pipSizeMode === "custom") {
+    return {
+      width: clampPipDimension(
+        state.settings.pipCustomWidth,
+        PIP_SIZE_LIMITS.minWidth,
+        PIP_SIZE_LIMITS.maxWidth,
+        640,
+      ),
+      height: clampPipDimension(
+        state.settings.pipCustomHeight,
+        PIP_SIZE_LIMITS.minHeight,
+        PIP_SIZE_LIMITS.maxHeight,
+        360,
+      ),
+    };
+  }
+
   const [width = 640, height = 360] = state.settings.pipSize.split("x").map(Number);
   return { width, height };
+}
+
+// カスタムサイズの入力欄→設定へ反映。値はクランプし、丸めた結果を入力欄へ戻す。
+function applyPipCustomSizeFromInputs() {
+  state.settings.pipCustomWidth = clampPipDimension(
+    els.pipSizeCustomWidth.value,
+    PIP_SIZE_LIMITS.minWidth,
+    PIP_SIZE_LIMITS.maxWidth,
+    state.settings.pipCustomWidth,
+  );
+  state.settings.pipCustomHeight = clampPipDimension(
+    els.pipSizeCustomHeight.value,
+    PIP_SIZE_LIMITS.minHeight,
+    PIP_SIZE_LIMITS.maxHeight,
+    state.settings.pipCustomHeight,
+  );
+  syncPipSizeInputsFromState();
+  saveSettings();
+  resizeDesktopPipWindow();
+  updatePip();
+}
+
+function syncPipSizeInputsFromState() {
+  els.pipSizeCustomWidth.value = state.settings.pipCustomWidth;
+  els.pipSizeCustomHeight.value = state.settings.pipCustomHeight;
+}
+
+function syncPipSizeCustomVisibility() {
+  els.pipSizeCustom.hidden = state.settings.pipSizeMode !== "custom";
 }
 
 async function syncDesktopPipWindow() {
@@ -4099,7 +4192,9 @@ function applyStoredSettings(settings) {
 // 保存済み設定をフォームへ反映する。初回ガイド表示の判定もここで行う。
 function applySettingsToControls() {
   els.fitMode.value = state.settings.fitMode;
-  els.pipSize.value = state.settings.pipSize;
+  els.pipSize.value = state.settings.pipSizeMode === "custom" ? "custom" : state.settings.pipSize;
+  syncPipSizeInputsFromState();
+  syncPipSizeCustomVisibility();
   const pipControlsSize = getPipControlsSize();
   const pipControlsPlacement = getPipControlsPlacement();
   const pipControlsPosition = getPipControlsPosition();

@@ -90,6 +90,46 @@ h2 {
   gap: 0.75rem;
 }
 
+/* カスタムPiPサイズ入力は、選択時だけ選択肢の下に折り返して表示する。 */
+.viewer-options {
+  flex-wrap: wrap;
+}
+
+.pip-size-custom {
+  flex-basis: 100%;
+  display: flex;
+  align-items: flex-end;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.pip-size-custom-field {
+  display: grid;
+  gap: 0.25rem;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.pip-size-custom-field input {
+  width: 6.5rem;
+  padding: 0.4rem 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--text);
+  background: var(--panel-soft);
+}
+
+.pip-size-custom-x {
+  padding-bottom: 0.45rem;
+  color: var(--muted);
+}
+
+.pip-size-custom-hint {
+  padding-bottom: 0.45rem;
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+
 .support-badge,
 .variant-badge {
   display: inline-flex;
