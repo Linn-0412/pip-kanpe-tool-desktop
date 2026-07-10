@@ -33,6 +33,12 @@ import {
   toggleCardGroup,
   toggleHidden as toggleHiddenCards,
 } from "./core.js";
+import {
+  applyDocumentTranslations,
+  getPreferredLanguage,
+  normalizeLanguage,
+  translate,
+} from "./i18n.js";
 
 // 主要な制限値と保存先。枚数上限やDB名を変えるforkはまずここを見る。
 const MAX_CARDS = 80;
@@ -184,6 +190,7 @@ const state = {
   desktopEventUnlisteners: [],
   shortcutCaptureTarget: null,
   updateCheckInProgress: false,
+  updateStatusDescriptor: null,
   maker: {
     items: [],
     selectedId: null,
@@ -210,6 +217,7 @@ const state = {
     showPipLabel: true,
     showFileExtension: false,
     optimizeImages: true,
+    language: getPreferredLanguage(),
     shortcutPrevious: DEFAULT_SHORTCUT_PREVIOUS,
     shortcutNext: DEFAULT_SHORTCUT_NEXT,
     hideGuideOnLaunch: false,
@@ -226,9 +234,6 @@ window.addEventListener("DOMContentLoaded", init);
 async function init() {
   bindElements();
   bindEvents();
-  buildMakerAssetPalette();
-  updateSupportBadge();
-  updateVariantBadge();
   prepareDesktopUi();
   if (isDesktopApp()) {
     await bindDesktopEvents();
@@ -242,13 +247,21 @@ async function init() {
     } else {
       loadSettings();
     }
+    applyLanguage();
+    buildMakerAssetPalette();
+    updateSupportBadge();
+    updateVariantBadge();
     applySettingsToControls();
     if (isDesktopApp()) {
       await applyDesktopShortcutSettings({ quiet: true, save: false });
     }
   } catch (error) {
     console.error(error);
-    setStatus("設定を読み込めませんでした。初期設定で起動します。", true);
+    applyLanguage();
+    buildMakerAssetPalette();
+    updateSupportBadge();
+    updateVariantBadge();
+    setStatus(t("status.settingsLoadFailed"), true);
   }
 
   try {
@@ -256,13 +269,13 @@ async function init() {
     state.cards = await loadCards();
     normalizeCurrentIndex();
     render();
-    setStatus(isDesktopApp() ? "準備完了。データはこのPCのアプリデータに保存されます。" : "準備完了。画像はこのブラウザ内だけに保存されます。");
+    setStatus(isDesktopApp() ? t("status.readyDesktop") : t("status.readyBrowser"));
     if (isDesktopApp()) {
       checkForUpdates({ automatic: true });
     }
   } catch (error) {
     console.error(error);
-    setStatus(isDesktopApp() ? "デスクトップ保存領域を開けませんでした。アプリを再起動してください。" : "IndexedDBを開けませんでした。ブラウザ設定を確認してください。", true);
+    setStatus(isDesktopApp() ? t("status.desktopStoreFailed") : t("status.dbOpenFailed"), true);
   }
 }
 
@@ -312,10 +325,10 @@ function bindDesktopEvents() {
     const direction = Number(event.detail?.direction);
     if (direction < 0) {
       previousCard();
-      setStatus("グローバルショートカット: 前のカンペへ");
+      setStatus(t("shortcut.globalPrevious"));
     } else if (direction > 0) {
       nextCard();
-      setStatus("グローバルショートカット: 次のカンペへ");
+      setStatus(t("shortcut.globalNext"));
     }
   };
 
@@ -350,30 +363,54 @@ async function checkForUpdates({ automatic = false } = {}) {
   }
 
   state.updateCheckInProgress = true;
-  setUpdateStatus("確認中...", "");
+  setLocalizedUpdateStatus("update.checking");
 
   try {
     const result = await invokeDesktop("check_update");
     if (result.available) {
-      const version = result.version ? `v${result.version}` : "新しいバージョン";
-      setUpdateStatus(`${version} があります`, "ok");
-      if (!automatic && window.confirm(`${version} に更新します。更新中にアプリが閉じます。続行しますか？`)) {
-        setUpdateStatus("更新をダウンロードしています...", "");
+      const version = result.version ? `v${result.version}` : null;
+      setLocalizedUpdateStatus(
+        "update.available",
+        version ? { version } : {},
+        "ok",
+        version ? {} : { version: "update.newVersion" },
+      );
+      const versionLabel = version ?? t("update.newVersion");
+      if (!automatic && window.confirm(t("update.confirm", { version: versionLabel }))) {
+        setLocalizedUpdateStatus("update.downloading");
         await invokeDesktop("install_update");
       }
     } else {
-      setUpdateStatus(`最新です（v${result.currentVersion}）`, "ok");
+      setLocalizedUpdateStatus("update.latest", { version: result.currentVersion }, "ok");
     }
   } catch (error) {
     console.warn("Update check failed", error);
     if (automatic) {
-      setUpdateStatus("更新情報を取得できませんでした", "warn");
+      setLocalizedUpdateStatus("update.failed", {}, "warn");
     } else {
-      setUpdateStatus("更新情報を取得できませんでした", "error");
+      setLocalizedUpdateStatus("update.failed", {}, "error");
     }
   } finally {
     state.updateCheckInProgress = false;
   }
+}
+
+function setLocalizedUpdateStatus(key, params = {}, tone = "", paramKeys = {}) {
+  state.updateStatusDescriptor = { key, params, tone, paramKeys };
+  refreshUpdateStatusLanguage();
+}
+
+function refreshUpdateStatusLanguage() {
+  if (!state.updateStatusDescriptor) {
+    return;
+  }
+
+  const { key, params, tone, paramKeys } = state.updateStatusDescriptor;
+  const translatedParams = { ...params };
+  Object.entries(paramKeys ?? {}).forEach(([name, translationKey]) => {
+    translatedParams[name] = t(translationKey);
+  });
+  setUpdateStatus(t(key, translatedParams), tone);
 }
 
 function setUpdateStatus(message, tone) {
@@ -395,6 +432,7 @@ function bindElements() {
     "beta-feedback",
     "support-badge",
     "support-link",
+    "language-select",
     "check-update",
     "update-status",
     "open-guide",
@@ -550,6 +588,18 @@ function bindEvents() {
   els.previewPipNext.addEventListener("click", nextCard);
   els.previewStage.addEventListener("click", handlePipControlsHitAreaClick);
   els.openPip.addEventListener("click", openPip);
+  els.languageSelect.addEventListener("change", () => {
+    state.settings.language = normalizeLanguage(els.languageSelect.value);
+    saveSettings();
+    applyLanguage();
+    buildMakerAssetPalette();
+    updateSupportBadge();
+    updateVariantBadge();
+    refreshUpdateStatusLanguage();
+    updateShortcutCaptureButtons();
+    render();
+    setStatus(t("language.changed"));
+  });
   els.supportLink?.addEventListener("click", openSupport);
   els.checkUpdate?.addEventListener("click", () => checkForUpdates({ automatic: false }));
   els.applyShortcuts?.addEventListener("click", () => applyDesktopShortcutSettings());
@@ -558,7 +608,7 @@ function bindEvents() {
   els.captureShortcutNext?.addEventListener("click", () => startShortcutCapture("next"));
   [els.shortcutPrevious, els.shortcutNext].forEach((input) => {
     input?.addEventListener("input", () => {
-      setShortcutStatus("未適用のショートカットです。適用を押してください。", "warn");
+      setShortcutStatus(t("shortcut.pending"), "warn");
     });
     input?.addEventListener("keydown", (event) => {
       if (event.key !== "Enter") {
@@ -814,11 +864,11 @@ async function openSupport(event) {
   event.preventDefault();
   try {
     await invokeDesktop("open_support_url");
-    setStatus("OFUSEの支援ページをブラウザで開きました。");
+    setStatus(t("support.opened"));
   } catch (error) {
     console.warn("Support URL open failed", error);
     window.open(SUPPORT_URL, "_blank", "noopener");
-    setStatus("支援ページを開けない場合は、ブラウザで https://ofuse.me/linn0412 を開いてください。", true);
+    setStatus(t("support.openFailed"), true);
   }
 }
 
@@ -830,7 +880,7 @@ async function handlePaste(event) {
 
   const clipboardData = event.clipboardData;
   if (!clipboardData) {
-    setStatus("クリップボードを読み取れませんでした。画像をコピーしてからもう一度試してください。", true);
+    setStatus(t("files.clipboardReadFailed"), true);
     return;
   }
 
@@ -840,21 +890,47 @@ async function handlePaste(event) {
       return;
     }
 
-    setStatus("クリップボードに画像が見つかりません。画像をコピーしてからCtrl+Vで貼り付けてください。", true);
+    setStatus(t("files.clipboardEmpty"), true);
     return;
   }
 
   event.preventDefault();
   await addFiles(imageFiles, {
     sortFiles: false,
-    emptyMessage: "クリップボードに画像が見つかりません。画像をコピーしてからもう一度貼り付けてください。",
-    progressMessage: (count) => `${count}枚をクリップボードから追加中...`,
-    completeMessage: (count) => `${count}枚をクリップボードから追加しました。`,
+    emptyMessage: t("files.clipboardEmptyRetry"),
+    progressMessage: (count) => t("files.clipboardAdding", { count }),
+    completeMessage: (count) => t("files.clipboardAdded", { count }),
   });
 }
 
 function getAppVariant() {
   return resolveAppVariant(window.location.pathname);
+}
+
+function getCurrentLanguage() {
+  return normalizeLanguage(state.settings.language);
+}
+
+function t(key, params = {}) {
+  return translate(getCurrentLanguage(), key, params);
+}
+
+function applyLanguage() {
+  state.settings.language = getCurrentLanguage();
+  applyDocumentTranslations(document, state.settings.language);
+  syncLanguageControl();
+  syncDocumentTitle();
+}
+
+function syncLanguageControl() {
+  if (els.languageSelect) {
+    els.languageSelect.value = getCurrentLanguage();
+    els.languageSelect.setAttribute("aria-label", t("language.label"));
+  }
+}
+
+function syncDocumentTitle() {
+  document.title = IS_BETA ? `${t("variant.beta")} ${t("app.title")}` : t("app.title");
 }
 
 function showGuideModal() {
@@ -892,7 +968,7 @@ function buildMakerAssetPalette() {
     const button = document.createElement("button");
     button.className = "secondary-button maker-marker-button";
     button.type = "button";
-    button.title = `フィールドマーカー ${marker.label}`;
+    button.title = t("maker.markerTitle", { label: marker.label });
     button.dataset.makerMarker = marker.id;
 
     const mark = document.createElement("span");
@@ -906,20 +982,21 @@ function buildMakerAssetPalette() {
 
   els.makerGimmicks.textContent = "";
   GIMMICK_ASSETS.forEach((gimmick) => {
+    const gimmickLabel = getMakerGimmickLabel(gimmick);
     const button = document.createElement("button");
     button.className = `secondary-button maker-gimmick-button${gimmick.template ? " template" : ""}`;
     button.type = "button";
-    button.title = gimmick.label;
+    button.title = gimmickLabel;
     button.dataset.makerGimmick = gimmick.id;
     button.style.setProperty("--gimmick-color", gimmick.color);
 
     const symbol = document.createElement("span");
     symbol.className = "maker-gimmick-symbol";
-    symbol.textContent = gimmick.short;
+    symbol.textContent = getMakerGimmickShort(gimmick);
 
     const label = document.createElement("span");
     label.className = "maker-gimmick-label";
-    label.textContent = gimmick.label;
+    label.textContent = gimmickLabel;
 
     button.append(symbol, label);
     els.makerGimmicks.append(button);
@@ -945,6 +1022,55 @@ function buildMakerAssetPalette() {
     button.append(image, label);
     els.makerJobIcons.append(button);
   });
+}
+
+function getMakerGimmickLabel(gimmick) {
+  if (gimmick.dice) {
+    return t("gimmick.dice", { number: gimmick.dice });
+  }
+
+  const keys = {
+    stack: "stack",
+    spread: "spread",
+    tower: "tower",
+    knockback: "knockback",
+    tether: "tether",
+    cone: "cone",
+    "circle-aoe": "circleAoe",
+    donut: "donut",
+    safe: "safe",
+    "half-room": "halfRoom",
+    "eight-spread": "eightSpread",
+    "dice-set": "diceSet",
+  };
+  const key = keys[gimmick.id];
+  return key ? t(`gimmick.${key}`) : gimmick.label;
+}
+
+function getMakerGimmickShort(gimmick) {
+  if (getCurrentLanguage() !== "en") {
+    return gimmick.short;
+  }
+
+  if (gimmick.dice) {
+    return String(gimmick.dice);
+  }
+
+  const shortLabels = {
+    stack: "STK",
+    spread: "SPR",
+    tower: "TWR",
+    knockback: "KB",
+    tether: "LINE",
+    cone: "CONE",
+    "circle-aoe": "AOE",
+    donut: "DON",
+    safe: "SAFE",
+    "half-room": "HALF",
+    "eight-spread": "8SP",
+    "dice-set": "1-8",
+  };
+  return shortLabels[gimmick.id] ?? gimmick.short;
 }
 
 async function handleMakerModalClick(event) {
@@ -1087,7 +1213,7 @@ function addMakerGimmick(gimmickId) {
     id: createMakerItemId(),
     type: "gimmick",
     gimmickId: gimmick.id,
-    label: gimmick.short,
+    label: getMakerGimmickShort(gimmick),
     color: gimmick.color,
     x: point.x,
     y: point.y,
@@ -1192,7 +1318,7 @@ async function addMakerJobIcon(assetId) {
     renderMaker();
   } catch (error) {
     console.error(error);
-    setStatus(`${asset.name} の素材を読み込めませんでした。`, true);
+    setStatus(t("maker.assetLoadFailed", { name: asset.name }), true);
   }
 }
 
@@ -1211,7 +1337,7 @@ async function loadMakerAssetDataUrl(asset) {
 }
 
 function addMakerText() {
-  const label = els.makerText.value.trim().replace(/\s+/g, " ") || "テキスト";
+  const label = els.makerText.value.trim().replace(/\s+/g, " ") || t("maker.defaultText");
   const point = getMakerSpawnPoint();
   const item = {
     id: createMakerItemId(),
@@ -1360,7 +1486,7 @@ function clearMakerItems() {
     return;
   }
 
-  const ok = confirm("作成中のカンペを全て消します。よろしいですか？");
+  const ok = confirm(t("maker.clearConfirm"));
   if (!ok) {
     return;
   }
@@ -1433,7 +1559,7 @@ function applyMakerBackground() {
       console.error(error);
       if (state.maker.background === backgroundId) {
         state.maker.renderedBackground = null;
-        setStatus(`${fieldAsset.label} のフィールド画像を読み込めませんでした。`, true);
+        setStatus(t("maker.fieldLoadFailed", { name: fieldAsset.label }), true);
       }
     });
 }
@@ -1707,7 +1833,7 @@ function appendMakerBoss(group, item) {
         "stroke-width": 8,
         "stroke-linejoin": "round",
       },
-      "ボス",
+      t("maker.boss"),
     ),
   );
 }
@@ -1933,7 +2059,7 @@ function appendMakerHalfRoom(group, item) {
         "stroke-width": 8,
         "stroke-linejoin": "round",
       },
-      "安置",
+      t("maker.safeText"),
     ),
     createSvgElement(
       "text",
@@ -1951,7 +2077,7 @@ function appendMakerHalfRoom(group, item) {
         "stroke-width": 8,
         "stroke-linejoin": "round",
       },
-      "焼き",
+      t("maker.burnText"),
     ),
   );
 }
@@ -2394,12 +2520,12 @@ function clamp(value, min, max) {
 async function saveMakerImage() {
   const hasFieldBackground = Boolean(MAKER_FIELD_BACKGROUNDS[state.maker.background]);
   if (state.maker.items.length === 0 && !hasFieldBackground) {
-    setStatus("作成する素材を追加してください。", true);
+    setStatus(t("maker.empty"), true);
     return;
   }
 
   try {
-    setStatus("作成したカンペを画像化しています...");
+    setStatus(t("maker.exporting"));
     await ensureMakerFieldBackgroundLoaded();
     const blob = await makerSvgToPngBlob();
     const file = new File([blob], createMakerImageFileName(), {
@@ -2408,13 +2534,13 @@ async function saveMakerImage() {
     });
     await addFiles([file], {
       sortFiles: false,
-      progressMessage: () => "作成したカンペを登録中...",
-      completeMessage: () => "作成したカンペを登録しました。",
+      progressMessage: () => t("maker.adding"),
+      completeMessage: () => t("maker.added"),
     });
     closeMakerModal();
   } catch (error) {
     console.error(error);
-    setStatus("作成したカンペを画像化できませんでした。", true);
+    setStatus(t("maker.failed"), true);
   }
 }
 
@@ -2466,7 +2592,7 @@ function createMakerImageFileName() {
 
 function updateSupportBadge() {
   const supported = isDesktopApp() || "documentPictureInPicture" in window;
-  els.supportBadge.textContent = supported ? "PiP対応" : "PiP非対応";
+  els.supportBadge.textContent = supported ? t("support.supported") : t("support.unsupported");
   els.supportBadge.classList.toggle("ok", supported);
   els.supportBadge.classList.toggle("warn", !supported);
   els.openPip.disabled = !supported;
@@ -2486,11 +2612,9 @@ function updateVariantBadge() {
 
   if (els.variantBadge) {
     els.variantBadge.hidden = false;
-    els.variantBadge.textContent = "β版";
+    els.variantBadge.textContent = t("variant.beta");
   }
-  if (!document.title.startsWith("β版 ")) {
-    document.title = `β版 ${document.title}`;
-  }
+  syncDocumentTitle();
 }
 
 // 画像本体はIndexedDBに保存する。サーバーへアップロードしないための中核。
@@ -2713,13 +2837,13 @@ function isEditablePasteTarget(target) {
 async function addFiles(fileList, options = {}) {
   const {
     sortFiles = true,
-    emptyMessage = "画像ファイルを選択してください。",
-    progressMessage = (count) => `${count}枚をファイル名順で追加中...`,
-    completeMessage = (count) => `${count}枚追加しました。`,
+    emptyMessage = t("files.chooseImage"),
+    progressMessage = (count) => t("files.adding", { count }),
+    completeMessage = (count) => t("files.added", { count }),
   } = options;
 
   if (!state.db) {
-    setStatus("保存領域の準備がまだ終わっていません。", true);
+    setStatus(t("deck.storageNotReady"), true);
     return;
   }
 
@@ -2735,13 +2859,13 @@ async function addFiles(fileList, options = {}) {
 
   const remaining = MAX_CARDS - state.cards.length;
   if (remaining <= 0) {
-    setStatus(`登録できる画像は最大${MAX_CARDS}枚です。`, true);
+    setStatus(t("files.limit", { max: MAX_CARDS }), true);
     return;
   }
 
   const accepted = imageFiles.slice(0, remaining);
   if (accepted.length < imageFiles.length) {
-    setStatus(`上限のため${accepted.length}枚だけ追加します。`, true);
+    setStatus(t("files.acceptedOnly", { count: accepted.length }), true);
   } else {
     setStatus(progressMessage(accepted.length));
   }
@@ -2770,7 +2894,7 @@ async function addFiles(fileList, options = {}) {
       addedCount += 1;
     } catch (error) {
       console.error(error);
-      setStatus(`${file.name} の追加に失敗しました。`, true);
+      setStatus(t("files.addFailed", { name: file.name }), true);
     }
   }
 
@@ -2779,27 +2903,27 @@ async function addFiles(fileList, options = {}) {
   if (addedCount > 0) {
     setStatus(completeMessage(addedCount));
   } else {
-    setStatus("画像を追加できませんでした。", true);
+    setStatus(t("files.noneAdded"), true);
   }
 }
 
 // 登録画像とグループ、PiP表示設定を1つの共有・バックアップ用ファイルへまとめる。
 async function exportDeck() {
   if (state.cards.length === 0) {
-    setStatus("エクスポートできる画像がありません。", true);
+    setStatus(t("deck.noExport"), true);
     return;
   }
 
   try {
-    setStatus("カンペセットを作成しています...");
+    setStatus(t("deck.exporting"));
     const payload = await createDeckPayload();
     const json = JSON.stringify(payload, null, 2);
     const blob = new Blob([json], { type: "application/json" });
     downloadBlob(blob, createDeckExportFileName());
-    setStatus(`${state.cards.length}枚のカンペセットを書き出しました。`);
+    setStatus(t("deck.exported", { count: state.cards.length }));
   } catch (error) {
     console.error(error);
-    setStatus("カンペセットを書き出せませんでした。", true);
+    setStatus(t("deck.exportFailed"), true);
   }
 }
 
@@ -2849,7 +2973,7 @@ async function importDeckFile(file) {
   }
 
   if (!state.db) {
-    setStatus("保存領域の準備がまだ終わっていません。", true);
+    setStatus(t("deck.storageNotReady"), true);
     return;
   }
 
@@ -2857,22 +2981,17 @@ async function importDeckFile(file) {
     const payload = parseDeckPayload(await file.text());
     const remaining = MAX_CARDS - state.cards.length;
     if (payload.cards.length > remaining) {
-      setStatus(
-        `このカンペセットは${payload.cards.length}枚です。残り登録可能枚数は${remaining}枚なので読み込めません。`,
-        true,
-      );
+      setStatus(t("deck.importTooMany", { count: payload.cards.length, remaining }), true);
       return;
     }
 
-    const ok = window.confirm(
-      `「${file.name}」から${payload.cards.length}枚を追加します。グループとPiP表示設定も読み込みます。よろしいですか？`,
-    );
+    const ok = window.confirm(t("deck.importConfirm", { name: file.name, count: payload.cards.length }));
     if (!ok) {
-      setStatus("カンペセットの読み込みをキャンセルしました。");
+      setStatus(t("deck.importCanceled"));
       return;
     }
 
-    setStatus("カンペセットを読み込んでいます...");
+    setStatus(t("deck.importing"));
     const preparedCards = await Promise.all(payload.cards.map((card) => prepareImportedCard(card)));
     const groupMap = mergeImportedGroups(payload.groups);
     const baseOrder = state.cards.length > 0 ? Math.max(...state.cards.map((card) => card.order)) + 1 : 0;
@@ -2897,10 +3016,10 @@ async function importDeckFile(file) {
     applySettingsToControls();
     normalizeCurrentIndex();
     render();
-    setStatus(`${importedCards.length}枚のカンペセットを読み込みました。`);
+    setStatus(t("deck.imported", { count: importedCards.length }));
   } catch (error) {
     console.error(error);
-    setStatus("カンペセットを読み込めませんでした。ファイル形式を確認してください。", true);
+    setStatus(t("deck.importFailed"), true);
   }
 }
 
@@ -3116,7 +3235,7 @@ function renderGroupControls() {
 
   const allOption = document.createElement("option");
   allOption.value = ALL_GROUP_ID;
-  allOption.textContent = "すべて";
+  allOption.textContent = t("group.all");
   els.groupFilter.append(allOption);
 
   state.settings.groups.forEach((group) => {
@@ -3144,7 +3263,7 @@ function normalizeSettingsGroups() {
     .map((group, index) => {
       const id = typeof group.id === "string" && group.id.length > 0 ? group.id : `group-${index + 1}`;
       const name = typeof group.name === "string" ? group.name.trim() : "";
-      return { id, name: name || `グループ ${index + 1}` };
+      return { id, name: name || t("group.defaultName", { number: index + 1 }) };
     })
     .filter((group) => {
       if (group.id === ALL_GROUP_ID || seen.has(group.id)) {
@@ -3196,7 +3315,7 @@ function getInitialCardGroupIds() {
 function addGroup() {
   const name = getGroupNameInputValue();
   if (!name) {
-    setStatus("グループ名を入力してください。", true);
+    setStatus(t("group.emptyName"), true);
     els.groupName.focus();
     return;
   }
@@ -3206,19 +3325,19 @@ function addGroup() {
   state.settings.activeGroupId = group.id;
   saveSettings();
   render();
-  setStatus(`グループ「${group.name}」を追加しました。`);
+  setStatus(t("group.added", { name: group.name }));
 }
 
 function renameGroup() {
   const group = getActiveGroup();
   if (!group) {
-    setStatus("名前を変更するグループを選択してください。", true);
+    setStatus(t("group.selectToRename"), true);
     return;
   }
 
   const name = getGroupNameInputValue();
   if (!name) {
-    setStatus("グループ名を入力してください。", true);
+    setStatus(t("group.emptyName"), true);
     els.groupName.focus();
     return;
   }
@@ -3228,7 +3347,7 @@ function renameGroup() {
   );
   saveSettings();
   render();
-  setStatus(`グループ名を「${name}」に変更しました。`);
+  setStatus(t("group.renamed", { name }));
 }
 
 async function deleteGroup() {
@@ -3238,9 +3357,7 @@ async function deleteGroup() {
   }
 
   const assignedCount = state.cards.filter((card) => normalizeCardGroupIds(card.groupIds).includes(group.id)).length;
-  const ok = confirm(
-    `グループ「${group.name}」を削除します。画像は削除されず、このグループ所属だけ外れます。よろしいですか？（所属 ${assignedCount}枚）`,
-  );
+  const ok = confirm(t("group.deleteConfirm", { name: group.name, count: assignedCount }));
   if (!ok) {
     return;
   }
@@ -3252,7 +3369,7 @@ async function deleteGroup() {
   saveSettings();
   normalizeCurrentIndex();
   render();
-  setStatus(`グループ「${group.name}」を削除しました。画像は残っています。`);
+  setStatus(t("group.deleted", { name: group.name }));
 }
 
 function renderDeckMeta() {
@@ -3261,10 +3378,10 @@ function renderDeckMeta() {
   const targetCards = isAllGroup(state.settings.activeGroupId) ? state.cards : groupCards;
   const totalSize = targetCards.reduce((sum, card) => sum + (card.size || 0), 0);
   const hiddenCount = targetCards.filter((card) => card.hidden).length;
-  const hiddenLabel = hiddenCount > 0 ? ` · 非表示 ${hiddenCount}` : "";
+  const hiddenLabel = hiddenCount > 0 ? ` · ${t("thumb.hiddenCount", { count: hiddenCount })}` : "";
   const countLabel = isAllGroup(state.settings.activeGroupId)
     ? `${state.cards.length} / ${MAX_CARDS}`
-    : `${groupCards.length}枚（全体 ${state.cards.length} / ${MAX_CARDS}）`;
+    : t("thumb.groupCount", { count: groupCards.length, total: state.cards.length, max: MAX_CARDS });
   els.deckMeta.textContent = `${countLabel} · ${formatBytes(totalSize)}${hiddenLabel}`;
 }
 
@@ -3275,7 +3392,7 @@ function renderThumbList() {
   if (state.cards.length === 0) {
     const empty = document.createElement("p");
     empty.className = "status-line";
-    empty.textContent = "まだ画像がありません。";
+    empty.textContent = t("thumb.empty");
     els.thumbList.append(empty);
     return;
   }
@@ -3284,7 +3401,7 @@ function renderThumbList() {
   if (groupIndices.length === 0) {
     const empty = document.createElement("p");
     empty.className = "status-line";
-    empty.textContent = "このグループにはまだ画像がありません。";
+    empty.textContent = t("group.empty");
     els.thumbList.append(empty);
     return;
   }
@@ -3302,7 +3419,7 @@ function renderThumbList() {
     select.type = "button";
     select.className = "thumb-select";
     select.disabled = card.hidden;
-    select.title = card.hidden ? "非表示中です（目アイコンで再表示）" : "この画像をプレビューに表示";
+    select.title = card.hidden ? t("thumb.selectHidden") : t("thumb.select");
     select.addEventListener("click", () => selectCard(index));
 
     const figure = document.createElement("span");
@@ -3318,7 +3435,7 @@ function renderThumbList() {
     if (card.hidden) {
       const badge = document.createElement("span");
       badge.className = "thumb-badge";
-      badge.textContent = "非表示";
+      badge.textContent = t("thumb.hidden");
       figure.append(badge);
     }
 
@@ -3330,19 +3447,19 @@ function renderThumbList() {
 
     const sub = document.createElement("span");
     sub.className = "thumb-sub";
-    sub.textContent = `${displayIndex + 1}枚目 · ${formatBytes(card.size || 0)}`;
+    sub.textContent = `${t("thumb.nth", { number: displayIndex + 1 })} · ${formatBytes(card.size || 0)}`;
 
     body.append(name, sub);
     select.append(figure, body);
 
     const toggle = makeHideToggle(card, index);
-    const rename = makeMiniButton("名", "名前変更", () => renameCard(index), "thumb-rename");
+    const rename = makeMiniButton(t("thumb.renameShort"), t("thumb.rename"), () => renameCard(index), "thumb-rename");
 
     const actions = document.createElement("div");
     actions.className = "thumb-actions";
     actions.append(toggle, rename);
 
-    const remove = makeMiniButton("×", "削除", () => removeCard(index), "danger thumb-remove");
+    const remove = makeMiniButton("×", t("thumb.delete"), () => removeCard(index), "danger thumb-remove");
 
     item.append(select, actions, remove);
     const groups = makeGroupAssignments(card, index);
@@ -3353,8 +3470,8 @@ function renderThumbList() {
     const reorder = document.createElement("div");
     reorder.className = "thumb-reorder";
     reorder.append(
-      makeMiniButton("↑", "前へ移動", () => moveCard(index, -1), "", displayIndex === 0),
-      makeMiniButton("↓", "後ろへ移動", () => moveCard(index, 1), "", displayIndex === groupIndices.length - 1),
+      makeMiniButton("↑", t("thumb.movePrevious"), () => moveCard(index, -1), "", displayIndex === 0),
+      makeMiniButton("↓", t("thumb.moveNext"), () => moveCard(index, 1), "", displayIndex === groupIndices.length - 1),
     );
 
     const row = document.createElement("div");
@@ -3371,8 +3488,8 @@ function makeHideToggle(card, index) {
   button.type = "button";
   button.className = `mini-button toggle${card.hidden ? " active" : ""}`;
   button.innerHTML = card.hidden ? EYE_OFF_ICON : EYE_ICON;
-  button.title = card.hidden ? "プレビュー/PiPで表示する" : "プレビュー/PiPで非表示にする";
-  button.setAttribute("aria-label", card.hidden ? "再表示する" : "非表示にする");
+  button.title = card.hidden ? t("thumb.show") : t("thumb.hide");
+  button.setAttribute("aria-label", card.hidden ? t("thumb.showAria") : t("thumb.hideAria"));
   button.addEventListener("click", () => toggleHidden(index));
   return button;
 }
@@ -3429,7 +3546,7 @@ async function updateCardGroup(index, groupId) {
   await putCard(updatedCard);
   normalizeCurrentIndex();
   render();
-  setStatus(`「${updatedCard.name}」のグループを更新しました。`);
+  setStatus(t("group.cardUpdated", { name: updatedCard.name }));
 }
 
 // プレビューは通常画面側の確認用。PiPと同じCSSクラスを使って見た目の差を減らす。
@@ -3474,14 +3591,14 @@ function updateEmptyState() {
   }
 
   if (state.cards.length === 0) {
-    strong.textContent = "攻略中に見たい画像を登録してください";
-    span.textContent = "PiP小窓の左右ボタン、またはこの画面の←→で切り替えできます。";
+    strong.textContent = t("preview.emptyTitle");
+    span.textContent = t("preview.emptyHint");
   } else if (getGroupIndices().length === 0) {
-    strong.textContent = "このグループにはまだ画像がありません";
-    span.textContent = "このグループを選んだまま画像を追加するか、登録画像のグループチェックをオンにしてください。";
+    strong.textContent = t("group.emptyPreviewTitle");
+    span.textContent = t("group.emptyPreviewHint");
   } else {
-    strong.textContent = "表示できる画像がありません";
-    span.textContent = "登録画像リストの目アイコンを押すと、非表示にした画像を再表示できます。";
+    strong.textContent = t("preview.noVisibleTitle");
+    span.textContent = t("preview.noVisibleHint");
   }
 }
 
@@ -3502,7 +3619,7 @@ async function openPip() {
   }
 
   if (!("documentPictureInPicture" in window)) {
-    setStatus("このブラウザはDocument Picture-in-Pictureに対応していません。", true);
+    setStatus(t("pip.unsupported"), true);
     return;
   }
 
@@ -3510,10 +3627,10 @@ async function openPip() {
     const hasGroupCards = getGroupIndices().length > 0;
     setStatus(
       state.cards.length > 0 && hasGroupCards
-        ? "表示できる画像がありません。リストの目アイコンで非表示を解除してください。"
+        ? t("pip.noVisible")
         : state.cards.length > 0
-          ? "このグループにはまだ画像がありません。画像を追加するか、登録画像のグループチェックをオンにしてください。"
-          : "PiPで表示する画像を登録してください。",
+          ? t("pip.noGroupImages")
+          : t("pip.noImages"),
       true,
     );
     return;
@@ -3530,10 +3647,10 @@ async function openPip() {
 
     buildPipDocument();
     updatePip();
-    setStatus("PiPを開きました。FF14は仮想フルスクリーンまたはウィンドウモードで表示できます。");
+    setStatus(t("pip.openedBrowser"));
   } catch (error) {
     console.error(error);
-    setStatus("PiPを開けませんでした。ボタン操作からもう一度試してください。", true);
+    setStatus(t("pip.openFailedBrowser"), true);
   }
 }
 
@@ -3542,10 +3659,10 @@ async function openDesktopPip() {
     const hasGroupCards = getGroupIndices().length > 0;
     setStatus(
       state.cards.length > 0 && hasGroupCards
-        ? "表示できる画像がありません。リストの目アイコンで非表示を解除してください。"
+        ? t("pip.noVisible")
         : state.cards.length > 0
-          ? "このグループにはまだ画像がありません。画像を追加するか、登録画像のグループチェックをオンにしてください。"
-          : "PiPで表示する画像を登録してください。",
+          ? t("pip.noGroupImages")
+          : t("pip.noImages"),
       true,
     );
     return;
@@ -3558,10 +3675,10 @@ async function openDesktopPip() {
     });
     state.desktopPipOpen = true;
     await syncDesktopPipWindow();
-    setStatus("Tauri版PiP小窓を開きました。Ctrl+F5で前、Ctrl+F6で次へ切り替えできます。");
+    setStatus(t("pip.openedDesktop"));
   } catch (error) {
     console.error(error);
-    setStatus("Tauri版PiP小窓を開けませんでした。もう一度試してください。", true);
+    setStatus(t("pip.openFailedDesktop"), true);
   }
 }
 
@@ -3627,7 +3744,7 @@ function buildPipDocument() {
   prev.id = "pip-prev";
   prev.className = "pip-button";
   prev.type = "button";
-  prev.title = "前の画像";
+  prev.title = t("preview.previousImage");
 
   const label = pip.document.createElement("div");
   label.id = "pip-label";
@@ -3637,7 +3754,7 @@ function buildPipDocument() {
   next.id = "pip-next";
   next.className = "pip-button";
   next.type = "button";
-  next.title = "次の画像";
+  next.title = t("preview.nextImage");
 
   controls.append(prev, label, next);
   shell.append(image, controls);
@@ -3705,12 +3822,12 @@ function updatePip() {
     image.removeAttribute("src");
     image.style.display = "none";
     image.alt = "";
-    pip.document.title = getActiveGroup() ? `PiP カンペ - ${getActiveGroup().name}` : formatPipDocumentTitle(null);
+    pip.document.title = getActiveGroup() ? t("pip.titleWithName", { name: getActiveGroup().name }) : formatPipDocumentTitle(null);
     label.textContent =
       state.cards.length > 0 && getGroupIndices().length === 0
-        ? "このグループにはまだ画像がありません"
+        ? t("group.emptyPreviewTitle")
         : state.cards.length > 0
-          ? "表示できる画像がありません"
+          ? t("preview.noVisibleTitle")
           : "";
     prev.disabled = true;
     next.disabled = true;
@@ -3833,19 +3950,28 @@ async function createDesktopPipPayload() {
     labelHidden: !shouldShowPipLabel(),
     hideTitleBar: state.settings.pipHideTitleBar === true,
   };
+  const strings = {
+    close: t("pip.close"),
+    fallbackTitle: t("pip.title"),
+    invalidPayload: t("pip.invalidPayload"),
+    noVisible: t("preview.noVisibleTitle"),
+    previousImage: t("preview.previousImage"),
+    nextImage: t("preview.nextImage"),
+  };
 
   if (!card) {
     return {
       hasCard: false,
-      title: activeGroup ? `PiP カンペ - ${activeGroup.name}` : formatPipDocumentTitle(null),
+      title: activeGroup ? t("pip.titleWithName", { name: activeGroup.name }) : formatPipDocumentTitle(null),
       message:
         state.cards.length > 0 && getGroupIndices().length === 0
-          ? "このグループにはまだ画像がありません"
+          ? t("group.emptyPreviewTitle")
           : state.cards.length > 0
-            ? "表示できる画像がありません"
-            : "PiPで表示する画像を登録してください",
+            ? t("preview.noVisibleTitle")
+            : t("pip.noImages"),
       fitMode: state.settings.fitMode,
       controls,
+      strings,
       canNavigate: false,
     };
   }
@@ -3858,6 +3984,7 @@ async function createDesktopPipPayload() {
     label: formatPipLabel(card),
     fitMode: state.settings.fitMode,
     controls,
+    strings,
     canNavigate: getVisibleIndices().length > 1,
   };
 }
@@ -3981,7 +4108,7 @@ function handlePipControlsHitAreaClick(event) {
 }
 
 function formatPipDocumentTitle(card) {
-  return card ? `PiP カンペ - ${formatPipName(card)}` : "PiP カンペ";
+  return card ? t("pip.titleWithName", { name: formatPipName(card) }) : t("pip.title");
 }
 
 function formatPipName(card) {
@@ -4030,8 +4157,8 @@ async function toggleHidden(index) {
   render();
   setStatus(
     updatedCard.hidden
-      ? `「${updatedCard.name}」をプレビュー/PiPで非表示にしました。`
-      : `「${updatedCard.name}」を再表示しました。`,
+      ? t("status.cardHidden", { name: updatedCard.name })
+      : t("status.cardShown", { name: updatedCard.name }),
   );
 }
 
@@ -4041,14 +4168,14 @@ async function renameCard(index) {
     return;
   }
 
-  const nextName = window.prompt("画像名を入力してください。", card.name);
+  const nextName = window.prompt(t("status.enterImageName"), card.name);
   if (nextName === null) {
     return;
   }
 
   const name = nextName.trim();
   if (!name) {
-    setStatus("画像名を入力してください。", true);
+    setStatus(t("status.enterImageName"), true);
     return;
   }
 
@@ -4062,10 +4189,10 @@ async function renameCard(index) {
     state.cards = state.cards.map((currentCard, cardIndex) => (cardIndex === index ? updatedCard : currentCard));
     render();
     updatePip();
-    setStatus(`画像名を「${name}」に変更しました。`);
+    setStatus(t("status.cardRenamed", { name }));
   } catch (error) {
     console.error(error);
-    setStatus("画像名を変更できませんでした。", true);
+    setStatus(t("status.cardRenameFailed"), true);
   }
 }
 
@@ -4081,7 +4208,7 @@ async function removeCard(index) {
   normalizeCurrentIndex();
   await persistOrder();
   render();
-  setStatus("画像を削除しました。");
+  setStatus(t("status.cardDeleted"));
 }
 
 async function moveCard(index, direction) {
@@ -4136,7 +4263,7 @@ async function clearAllCards() {
     return;
   }
 
-  const ok = confirm("登録画像をすべて削除します。よろしいですか？");
+  const ok = confirm(t("deck.clearConfirm"));
   if (!ok) {
     return;
   }
@@ -4146,7 +4273,7 @@ async function clearAllCards() {
   state.cards = [];
   state.currentIndex = 0;
   render();
-  setStatus("すべて削除しました。");
+  setStatus(t("deck.cleared"));
 }
 
 function normalizeCurrentIndex() {
@@ -4218,6 +4345,7 @@ function applyStoredSettings(settings) {
     state.settings = { ...state.settings, ...settings };
   }
 
+  state.settings.language = normalizeLanguage(state.settings.language);
   normalizeSettingsGroups();
 }
 
@@ -4257,7 +4385,7 @@ function applySettingsToControls() {
   if (els.shortcutNext) {
     els.shortcutNext.value = state.settings.shortcutNext || DEFAULT_SHORTCUT_NEXT;
   }
-  setShortcutStatus("デスクトップ版ではこの設定でグローバルショートカットを登録します。", "");
+  setShortcutStatus(t("shortcut.desktopHint"), "");
   els.hideGuideNextTime.checked = state.settings.hideGuideOnLaunch;
 
   const guideForced = new URLSearchParams(window.location.search).get("guide") === "1";
@@ -4278,11 +4406,11 @@ async function applyDesktopShortcutSettings({ quiet = false, save = true } = {})
   const previous = normalizeShortcutValue(els.shortcutPrevious?.value || state.settings.shortcutPrevious);
   const next = normalizeShortcutValue(els.shortcutNext?.value || state.settings.shortcutNext);
   if (!previous || !next) {
-    setShortcutStatus("前/次のショートカットを両方入力してください。", "error");
+    setShortcutStatus(t("shortcut.missing"), "error");
     return;
   }
   if (previous.toLowerCase() === next.toLowerCase()) {
-    setShortcutStatus("前/次に同じショートカットは設定できません。", "error");
+    setShortcutStatus(t("shortcut.duplicate"), "error");
     return;
   }
 
@@ -4295,13 +4423,13 @@ async function applyDesktopShortcutSettings({ quiet = false, save = true } = {})
       saveSettings();
     }
     if (!quiet) {
-      setStatus(`ショートカットを更新しました。前: ${result.previous} / 次: ${result.next}`);
+      setStatus(t("shortcut.updated", { previous: result.previous, next: result.next }));
     }
   } catch (error) {
     console.warn("Shortcut registration failed", error);
     setShortcutStatus(String(error), "error");
     if (!quiet) {
-      setStatus("ショートカットを登録できませんでした。別のキーを試してください。", true);
+      setStatus(t("shortcut.failed"), true);
     }
   }
 }
@@ -4313,8 +4441,8 @@ function startShortcutCapture(target) {
 
   state.shortcutCaptureTarget = target;
   updateShortcutCaptureButtons();
-  const label = target === "previous" ? "前のカンペ" : "次のカンペ";
-  setShortcutStatus(`${label}に割り当てるキーを押してください。Escでキャンセルできます。`, "warn");
+  const label = target === "previous" ? t("shortcut.previous") : t("shortcut.next");
+  setShortcutStatus(t("shortcut.capture", { label }), "warn");
 }
 
 async function handleShortcutCaptureKeydown(event) {
@@ -4322,13 +4450,13 @@ async function handleShortcutCaptureKeydown(event) {
   event.stopPropagation();
 
   if (event.key === "Escape") {
-    cancelShortcutCapture("キー入力をキャンセルしました。");
+    cancelShortcutCapture(t("shortcut.canceled"));
     return;
   }
 
   const shortcut = shortcutFromKeyboardEvent(event);
   if (!shortcut) {
-    setShortcutStatus("Ctrl / Alt / Shift などの修飾キー以外も一緒に押してください。", "warn");
+    setShortcutStatus(t("shortcut.modifierOnly"), "warn");
     return;
   }
 
@@ -4355,12 +4483,12 @@ function updateShortcutCaptureButtons() {
   const nextActive = state.shortcutCaptureTarget === "next";
   if (els.captureShortcutPrevious) {
     els.captureShortcutPrevious.classList.toggle("capturing", previousActive);
-    els.captureShortcutPrevious.textContent = previousActive ? "入力待ち" : "キー入力";
+    els.captureShortcutPrevious.textContent = previousActive ? t("actions.waitingKey") : t("actions.captureKey");
     els.captureShortcutPrevious.setAttribute("aria-pressed", String(previousActive));
   }
   if (els.captureShortcutNext) {
     els.captureShortcutNext.classList.toggle("capturing", nextActive);
-    els.captureShortcutNext.textContent = nextActive ? "入力待ち" : "キー入力";
+    els.captureShortcutNext.textContent = nextActive ? t("actions.waitingKey") : t("actions.captureKey");
     els.captureShortcutNext.setAttribute("aria-pressed", String(nextActive));
   }
 }
@@ -4475,8 +4603,8 @@ function syncShortcutControls(shortcuts) {
   const registered = shortcuts.previousRegistered && shortcuts.nextRegistered;
   const tone = registered ? "ok" : "warn";
   const message = registered
-    ? `登録中: 前 ${shortcuts.previous} / 次 ${shortcuts.next}`
-    : `一部のショートカットを登録できていません。前 ${shortcuts.previous} / 次 ${shortcuts.next}`;
+    ? t("shortcut.registered", { previous: shortcuts.previous, next: shortcuts.next })
+    : t("shortcut.partial", { previous: shortcuts.previous, next: shortcuts.next });
   setShortcutStatus(message, tone);
 }
 

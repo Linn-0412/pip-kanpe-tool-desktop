@@ -1,5 +1,20 @@
 # 機能仕様
 
+## English Summary
+
+PiP Kanpe Tool Desktop is a local desktop app for managing reference images during FF14 and similar content. Users can register up to 80 images, organize them into groups, preview them, and show the current image in an always-on-top Tauri subwindow.
+
+Important behavior:
+
+- Target OS is Windows.
+- The PiP subwindow is not expected to appear over exclusive fullscreen games.
+- Virtual fullscreen and windowed mode are supported.
+- Images are stored locally and are not uploaded to a server.
+- Images can be added from file picker, drag and drop, or clipboard paste.
+- `.pipkanpe` files can import/export images, order, groups, and PiP display settings.
+- Global shortcuts default to `Ctrl+F5` for previous and `Ctrl+F6` for next.
+- The UI supports Japanese and English. The selected language is saved as an app setting.
+
 ## 目的
 
 PiP Kanpe Tool Desktopは、FF14などの攻略中に参照したいカンペ画像をローカルで管理し、常に手前表示の小窓で素早く切り替えるためのデスクトップアプリです。
@@ -144,3 +159,23 @@ PiP Kanpe Tool Desktopは、FF14などの攻略中に参照したいカンペ画
 - `更新を確認` ボタンでGitHub Releases上の更新情報を確認します。
 - 更新がある場合、ユーザー確認後にダウンロードとインストールへ進みます。
 - 起動時にも自動で更新確認します。
+
+## 多言語表示
+
+- UI表示言語は日本語と英語に対応します。
+- 初期値はブラウザ/WebViewの優先言語から決定します。
+  - `ja` 系は日本語
+  - `en` 系は英語
+  - その他は日本語へフォールバック
+- ユーザーが言語を変更した場合、設定として保存します。
+- PiP小窓へ送るタイトル、ボタン説明、空表示メッセージも現在の表示言語に合わせます。
+
+## Localization
+
+- Supported UI languages are Japanese and English.
+- The initial language is chosen from the WebView language preference.
+  - `ja` uses Japanese.
+  - `en` uses English.
+  - Other languages fall back to Japanese.
+- User language changes are saved in app settings.
+- The PiP subwindow receives localized titles, button titles, and empty-state messages from the main window.

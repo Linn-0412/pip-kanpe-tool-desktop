@@ -4,6 +4,26 @@ PiP Kanpe Tool のデスクトップアプリ版リポジトリです。
 
 このリポジトリは Web 版をベースに、Tauri などのデスクトップアプリ化、アプリ内アップデーター、デスクトップ向け配布を検討するために分離しています。
 
+## English Overview
+
+PiP Kanpe Tool Desktop is a Tauri-based desktop version of PiP Kanpe Tool.
+
+It manages local reference images for FF14 and similar content, then shows the current image in a small always-on-top window. Unlike the browser version, the desktop app does not depend on Document Picture-in-Picture or a browser extension for global shortcuts.
+
+Main features:
+
+- Local image registration from file picker, drag and drop, or clipboard paste
+- Up to 80 registered images
+- Groups for organizing images by phase, strategy, or party
+- Import/export of `.pipkanpe` deck files
+- Built-in kanpe editor for creating simple strategy diagrams
+- Always-on-top PiP-style Tauri subwindow
+- Configurable global shortcuts for previous/next image
+- Stable/beta update channels using GitHub Releases
+- Japanese/English UI language setting
+
+The detailed specifications are kept in [docs/README.md](./docs/README.md). Japanese text is the primary source for now, and English summaries are included for non-Japanese contributors and users.
+
 ## 現在の状態
 
 - Web 版の主要ファイルを初期ベースとしてコピー
@@ -15,6 +35,7 @@ PiP Kanpe Tool のデスクトップアプリ版リポジトリです。
 - 起動時とボタン操作でアプリ内更新チェックを実行し、手動操作で更新適用へ進める
 - GitHub Actions で CI と Windows 向け Release asset 作成を実行
 - 初回 stable Release `v0.1.0` を作成済み
+- 日本語/英語のUI表示切り替えに対応
 
 ## 開発コマンド
 
@@ -33,6 +54,8 @@ Rust / Cargo が必要です。未導入の場合は Tauri の前提条件を入
 今後はデスクトップ版を主系統として、詳細仕様を [docs/README.md](./docs/README.md) に集約します。
 
 Web版から継承した機能も、デスクトップ版で正式採用したものはこの仕様書を正として扱います。
+
+English readers should start from [docs/README.md](./docs/README.md). Each spec file includes an English summary of the important behavior and constraints.
 
 ## 保存方式
 

@@ -63,7 +63,8 @@ function renderPip(payload) {
   }
 
   currentPayload = payload;
-  document.title = payload.title || "PiP カンペ";
+  document.title = payload.title || payload.strings?.fallbackTitle || "PiP カンペ";
+  applyButtonTitles(payload.strings);
   applyControlClasses(payload.controls);
   applyTitleBarState(Boolean(payload.controls?.hideTitleBar));
 
@@ -82,13 +83,26 @@ function renderPip(payload) {
     els.pipImage.removeAttribute("src");
     els.pipImage.alt = "";
     els.pipLabel.textContent = "";
-    els.pipEmpty.textContent = payload.message || "表示できる画像がありません。";
+    els.pipEmpty.textContent = payload.message || payload.strings?.noVisible || "表示できる画像がありません。";
   }
 
   const canNavigate = Boolean(payload.canNavigate);
   els.pipPrev.disabled = !canNavigate;
   els.pipNext.disabled = !canNavigate;
   updateButtonLabels(Boolean(payload.controls?.vertical));
+}
+
+function applyButtonTitles(strings = {}) {
+  if (strings.close) {
+    els.pipClose.title = strings.close;
+    els.pipClose.setAttribute("aria-label", strings.close);
+  }
+  if (strings.previousImage) {
+    els.pipPrev.title = strings.previousImage;
+  }
+  if (strings.nextImage) {
+    els.pipNext.title = strings.nextImage;
+  }
 }
 
 function applyControlClasses(controls = {}) {

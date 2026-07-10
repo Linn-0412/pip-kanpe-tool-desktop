@@ -8,6 +8,7 @@ const entries = [
   "index.html",
   "pip.html",
   "app.js",
+  "i18n.js",
   "pip-window.js",
   "core.js",
   "styles.css",

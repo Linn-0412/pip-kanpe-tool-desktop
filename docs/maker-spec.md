@@ -1,5 +1,19 @@
 # カンペ作成仕様
 
+## English Summary
+
+The in-app kanpe editor creates simple strategy diagrams without requiring an external image editor.
+
+Main rules:
+
+- Canvas is SVG, square, and fixed at 1024 x 1024.
+- Backgrounds can be dark, light, transparent, or selected field images.
+- Parts can be added, dragged, resized, stretched, rotated, and deleted.
+- Width and height scaling can reach 1000% for long AoE shapes.
+- The selected part can be deleted with the Delete key.
+- The final canvas is rendered to PNG and added to the registered image list.
+- Newly generated images behave like normal registered images, including rename, groups, ordering, and PiP display.
+
 ## 目的
 
 アプリ内で簡易的な攻略カンペ画像を作成し、そのまま登録画像へ追加できるようにします。

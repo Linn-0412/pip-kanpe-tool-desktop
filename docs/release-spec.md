@@ -1,5 +1,21 @@
 # リリース・更新仕様
 
+## English Summary
+
+The desktop app uses two update channels:
+
+- `stable`
+  - Normal user release.
+  - Git tag format: `vX.Y.Z`.
+  - Uses the latest GitHub Release updater JSON.
+- `beta`
+  - Pre-release channel for supporters and testers.
+  - Uses the fixed `beta` prerelease tag.
+
+Release metadata must keep the same version across `package.json`, `package-lock.json`, `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml`, `src-tauri/Cargo.lock`, and cache-busting query strings in `index.html`/`pip.html`. Use `npm run release:check` before release.
+
+Tauri updater signing is required. Public keys are stored in config files, but private keys must never be committed. GitHub Actions receives signing keys through repository secrets.
+
 ## チャンネル
 
 ### stable

@@ -6,8 +6,8 @@
     <meta name="theme-color" content="#111111">
     <title>PiP カンペツール</title>
     <link rel="icon" href="./favicon.jpg" type="image/jpeg">
-    <link rel="stylesheet" href="./styles.css?v=0.1.4">
-    <script type="module" src="./app.js?v=0.1.4"></script>
+    <link rel="stylesheet" href="./styles.css?v=0.1.5">
+    <script type="module" src="./app.js?v=0.1.5"></script>
   </head>
   <body>
     <header class="app-header">
@@ -18,6 +18,13 @@
       <div class="header-actions">
         <span id="variant-badge" class="variant-badge" hidden>β版</span>
         <span id="support-badge" class="support-badge">確認中</span>
+        <label class="language-control">
+          <span>言語</span>
+          <select id="language-select" aria-label="言語">
+            <option value="ja">日本語</option>
+            <option value="en">English</option>
+          </select>
+        </label>
         <a id="support-link" class="secondary-button support-link" href="https://ofuse.me/linn0412" target="_blank" rel="noopener">支援する</a>
         <button id="check-update" class="secondary-button update-button" type="button" hidden>更新を確認</button>
         <span id="update-status" class="update-status" hidden></span>
@@ -122,14 +129,14 @@
 
         <div class="viewer-options">
           <label>
-            表示
+            <span id="fit-mode-label">表示</span>
             <select id="fit-mode">
               <option value="contain">全体を表示</option>
               <option value="cover">画面いっぱい</option>
             </select>
           </label>
           <label>
-            PiPサイズ
+            <span id="pip-size-label">PiPサイズ</span>
             <select id="pip-size">
               <option value="480x270">480 x 270</option>
               <option value="640x360" selected>640 x 360</option>
@@ -140,12 +147,12 @@
           </label>
           <div id="pip-size-custom" class="pip-size-custom" hidden>
             <label class="pip-size-custom-field">
-              幅 (px)
+              <span id="pip-custom-width-label">幅 (px)</span>
               <input id="pip-size-custom-width" type="number" min="320" max="1280" step="10" inputmode="numeric" autocomplete="off">
             </label>
             <span class="pip-size-custom-x" aria-hidden="true">×</span>
             <label class="pip-size-custom-field">
-              高さ (px)
+              <span id="pip-custom-height-label">高さ (px)</span>
               <input id="pip-size-custom-height" type="number" min="180" max="720" step="10" inputmode="numeric" autocomplete="off">
             </label>
             <span class="pip-size-custom-hint">幅320〜1280 / 高さ180〜720</span>
@@ -267,14 +274,14 @@
           <div class="group-settings-body shortcut-settings-body">
             <div class="shortcut-grid">
               <label class="shortcut-field">
-                <span>前のカンペ</span>
+                <span id="shortcut-previous-label">前のカンペ</span>
                 <div class="shortcut-input-row">
                   <input id="shortcut-previous" type="text" value="Ctrl+F5" list="shortcut-presets" spellcheck="false" autocomplete="off">
                   <button id="capture-shortcut-previous" class="mini-button shortcut-capture-button" type="button">キー入力</button>
                 </div>
               </label>
               <label class="shortcut-field">
-                <span>次のカンペ</span>
+                <span id="shortcut-next-label">次のカンペ</span>
                 <div class="shortcut-input-row">
                   <input id="shortcut-next" type="text" value="Ctrl+F6" list="shortcut-presets" spellcheck="false" autocomplete="off">
                   <button id="capture-shortcut-next" class="mini-button shortcut-capture-button" type="button">キー入力</button>
@@ -389,7 +396,7 @@
         <div class="maker-workspace">
           <aside class="maker-tools" aria-label="作成ツール">
             <label class="maker-field">
-              <span>背景</span>
+              <span id="maker-background-label">背景</span>
               <select id="maker-background">
                 <option value="dark" selected>黒背景</option>
                 <option value="light">白背景</option>
@@ -405,32 +412,32 @@
             </label>
 
             <label class="maker-field">
-              <span>色</span>
+              <span id="maker-color-label">色</span>
               <input id="maker-color" type="color" value="#ffd166">
             </label>
 
             <div class="maker-transform-controls" aria-label="選択中パーツの調整">
               <label class="maker-field">
-                <span>大きさ <output id="maker-size-value" for="maker-size">100%</output></span>
+                <span><span id="maker-size-label">大きさ</span> <output id="maker-size-value" for="maker-size">100%</output></span>
                 <input id="maker-size" type="range" min="50" max="180" step="5" value="100" disabled>
               </label>
               <label class="maker-field">
-                <span>横幅 <output id="maker-width-value" for="maker-width-scale">100%</output></span>
+                <span><span id="maker-width-label">横幅</span> <output id="maker-width-value" for="maker-width-scale">100%</output></span>
                 <input id="maker-width-scale" type="range" min="25" max="1000" step="5" value="100" disabled>
               </label>
               <label class="maker-field">
-                <span>縦幅 <output id="maker-height-value" for="maker-height-scale">100%</output></span>
+                <span><span id="maker-height-label">縦幅</span> <output id="maker-height-value" for="maker-height-scale">100%</output></span>
                 <input id="maker-height-scale" type="range" min="25" max="1000" step="5" value="100" disabled>
               </label>
               <label class="maker-field">
-                <span>向き <output id="maker-rotation-value" for="maker-rotation">0°</output></span>
+                <span><span id="maker-rotation-label">向き</span> <output id="maker-rotation-value" for="maker-rotation">0°</output></span>
                 <input id="maker-rotation" type="range" min="-180" max="180" step="5" value="0" disabled>
               </label>
               <button id="maker-reset-transform" class="secondary-button" type="button" disabled>大きさ/向きを戻す</button>
             </div>
 
             <div class="maker-tool-section">
-              <span>図形</span>
+              <span id="maker-shapes-label">図形</span>
               <div class="maker-button-grid">
                 <button class="secondary-button" type="button" data-maker-add="circle">円</button>
                 <button class="secondary-button" type="button" data-maker-add="rect">四角</button>
@@ -444,17 +451,17 @@
             </div>
 
             <div class="maker-tool-section">
-              <span>マーカー</span>
+              <span id="maker-markers-label">マーカー</span>
               <div id="maker-field-markers" class="maker-button-grid marker-grid"></div>
             </div>
 
             <div class="maker-tool-section">
-              <span>ギミック</span>
+              <span id="maker-gimmicks-label">ギミック</span>
               <div id="maker-gimmicks" class="maker-button-grid gimmick-grid"></div>
             </div>
 
             <div class="maker-tool-section">
-              <span>ロール</span>
+              <span id="maker-roles-label">ロール</span>
               <div class="maker-button-grid role-grid">
                 <button class="secondary-button" type="button" data-maker-label="MT">MT</button>
                 <button class="secondary-button" type="button" data-maker-label="ST">ST</button>
@@ -468,12 +475,12 @@
             </div>
 
             <div class="maker-tool-section">
-              <span>ジョブアイコン</span>
+              <span id="maker-job-icons-label">ジョブアイコン</span>
               <div id="maker-job-icons" class="maker-button-grid job-icon-grid"></div>
             </div>
 
             <label class="maker-field">
-              <span>テキスト</span>
+              <span id="maker-text-label">テキスト</span>
               <input id="maker-text" type="text" maxlength="24" placeholder="例: 外周へ">
             </label>
             <button id="maker-add-text" class="secondary-button" type="button">テキスト追加</button>

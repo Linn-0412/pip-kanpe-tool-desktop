@@ -1,11 +1,25 @@
 # デスクトップ実装仕様
 
+## English Summary
+
+The desktop app is built with Tauri v2. The main window manages images, groups, settings, the kanpe editor, update checks, and shortcut settings. A separate always-on-top `pip` window renders the current image and receives state snapshots from the main window.
+
+Core implementation points:
+
+- Frontend files are copied into `dist/` for the Tauri build.
+- `app.js` owns the main application state.
+- `pip-window.js` only renders payloads sent from the main window and requests a snapshot on startup.
+- Tauri commands handle persistence, PiP window management, global shortcuts, updater actions, and opening external links.
+- Global shortcut events are sent back to the main window as navigation events.
+- Localized strings used by the PiP window are included in the payload sent from the main window.
+
 ## 構成
 
 - フロントエンド:
   - `index.html`
   - `app.js`
   - `core.js`
+  - `i18n.js`
   - `styles.css`
   - `pip.html`
   - `pip-window.js`
@@ -77,6 +91,13 @@
 4. `pip-window.js` は起動時に `request_pip_snapshot` を呼びます。
 5. メイン画面は `pip:request-snapshot` を受け、現在カードと設定を `update_pip_window` で送ります。
 6. 以降、画像切り替えや設定変更時に `syncDesktopPipWindow()` で小窓を更新します。
+
+## ローカライズ同期
+
+- メイン画面の表示言語は `i18n.js` の辞書で管理します。
+- `app.js` は現在言語に合わせてDOM文言を更新します。
+- PiP小窓は独立したwindowなので、必要な文言をpayloadの `strings` として受け取ります。
+- PiP小窓側はpayload内の `strings` を使い、タイトル、前/次ボタン説明、閉じるボタン説明、空表示を更新します。
 
 ## 前後切り替えフロー
 

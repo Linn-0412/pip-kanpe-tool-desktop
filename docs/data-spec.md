@@ -1,5 +1,19 @@
 # データ仕様
 
+## English Summary
+
+Desktop data is stored in a JSON file under the application data directory instead of IndexedDB/localStorage.
+
+Primary files and formats:
+
+- `<app data dir>/kanpe-store.json`
+  - Stores app settings, groups, card metadata, and image DataURLs.
+- `.pipkanpe`
+  - Import/export format for sharing or backing up kanpe decks.
+  - Includes cards, groups, order, and selected PiP display settings.
+
+The current storage format version is `1`. Image files are stored as DataURLs for implementation simplicity. If storage size becomes a problem, the app may later move image bodies to separate files or SQLite.
+
 ## 保存方針
 
 デスクトップ版では、Web版のIndexedDB / localStorageの代わりに、アプリデータ配下のJSONファイルへ保存します。
@@ -82,11 +96,17 @@
 | `showPipLabel` | 画像名と枚数を表示するか | `true`, `false` |
 | `showFileExtension` | 拡張子を表示するか | `true`, `false` |
 | `optimizeImages` | 保存時に画像を軽量化するか | `true`, `false` |
+| `language` | UI表示言語 | `ja`, `en` |
 | `shortcutPrevious` | 前のカンペショートカット | `Ctrl+F5` |
 | `shortcutNext` | 次のカンペショートカット | `Ctrl+F6` |
 | `hideGuideOnLaunch` | 起動時ガイドを非表示にするか | `true`, `false` |
 | `activeGroupId` | 選択中グループID | `all` |
 | `groups` | グループ一覧 | `[{ "id": "...", "name": "..." }]` |
+
+English notes:
+
+- `language` is a user preference and is not included in `.pipkanpe` exports.
+- Deck import/export should not overwrite the user's current UI language.
 
 ## `.pipkanpe`
 

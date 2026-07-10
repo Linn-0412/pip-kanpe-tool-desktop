@@ -1,5 +1,11 @@
 # テスト仕様
 
+## English Summary
+
+CI should run before release builds and verify dependency installation, release metadata, frontend build, JavaScript syntax, core unit tests, Rust formatting, Rust type checks, Rust tests, and clippy warnings.
+
+Manual release testing should cover app startup, image registration, image operations, groups, deck import/export, PiP subwindow behavior, global shortcuts, kanpe editor behavior, persistence after restart, update checks, support links, and language switching.
+
 ## CIで確認すること
 
 GitHub Actionsでは、Releaseビルド前に次を確認します。
@@ -32,6 +38,14 @@ GitHub Actionsでは、Releaseビルド前に次を確認します。
 - 初回ガイドが表示される
 - `次回以降表示しない` が保存される
 - `使い方` ボタンでガイドを再表示できる
+
+### 言語切替
+
+- 初期表示で日本語または英語が選択される
+- 言語セレクトで日本語から英語へ切り替えられる
+- 言語セレクトで英語から日本語へ切り替えられる
+- アプリを再起動しても選択した言語が残る
+- PiP小窓のタイトル、前/次ボタン説明、空表示メッセージが選択言語に合う
 
 ### 画像登録
 

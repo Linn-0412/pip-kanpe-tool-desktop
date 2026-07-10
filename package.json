@@ -1,11 +1,11 @@
 {
   "name": "pip-kanpe-tool-desktop",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "private": true,
   "type": "module",
   "scripts": {
     "build:web": "node scripts/build-web.mjs",
-    "check": "node --check app.js && node --check core.js && node --check pip-window.js && node --check scripts/build-web.mjs && node --check scripts/dev-server.mjs",
+    "check": "node --check app.js && node --check core.js && node --check i18n.js && node --check pip-window.js && node --check scripts/build-web.mjs && node --check scripts/dev-server.mjs",
     "dev:web": "node scripts/dev-server.mjs",
     "release:check": "node scripts/validate-release.mjs",
     "tauri": "tauri",
