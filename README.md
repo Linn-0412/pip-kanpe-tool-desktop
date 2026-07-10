@@ -28,6 +28,12 @@ npm run tauri:build:beta
 
 Rust / Cargo が必要です。未導入の場合は Tauri の前提条件を入れてから `npm run tauri:dev` を実行してください。
 
+## 仕様書
+
+今後はデスクトップ版を主系統として、詳細仕様を [docs/README.md](./docs/README.md) に集約します。
+
+Web版から継承した機能も、デスクトップ版で正式採用したものはこの仕様書を正として扱います。
+
 ## 保存方式
 
 Web 版では画像を IndexedDB、設定を localStorage に保存していました。
